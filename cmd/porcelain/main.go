@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/danmcfan/porcelain/internal/analysis"
 	"github.com/danmcfan/porcelain/internal/ffmpeg"
 	"github.com/danmcfan/porcelain/internal/probe"
 	"github.com/danmcfan/porcelain/internal/render"
@@ -35,11 +36,16 @@ const usage = `porcelain: deterministic video editing for an LLM Harness. Output
 Usage:
   porcelain doctor                         check ffmpeg/ffprobe
   porcelain probe <dir|file>...            describe each Source in the Footage
+  porcelain shots <dir|file>...            split each video Source into Shots
+  porcelain contact-sheet <dir|file>...    grid images of each Source's Shots
   porcelain timeline validate <file.json>  check a Timeline against the schema and Footage
   porcelain render <timeline.json> -o out.mp4
   porcelain version
 
-Not implemented yet (exit 2): shots, contact-sheet, analyze-song, export
+Not implemented yet (exit 2): analyze-song, export
+
+Proxies, Shots and Contact Sheets are cached in $PORCELAIN_CACHE
+(default: the user cache directory), keyed by Source content hash.
 `
 
 // cliError is the JSON shape of every error.
@@ -104,7 +110,11 @@ func dispatch(ctx context.Context, args []string) (any, error) {
 		return validateCmd(ctx, rest[1:])
 	case "render":
 		return renderCmd(ctx, rest)
-	case "shots", "contact-sheet", "analyze-song", "export":
+	case "shots":
+		return shotsCmd(ctx, rest)
+	case "contact-sheet":
+		return contactSheetCmd(ctx, rest)
+	case "analyze-song", "export":
 		return nil, fail(exitNotImplemented, "not_implemented",
 			fmt.Errorf("porcelain %s is not implemented yet", cmd), nil)
 	case "version", "--version":
@@ -144,6 +154,89 @@ func probeCmd(ctx context.Context, args []string) (any, error) {
 	}
 	sources := probe.Probe(ctx, paths)
 	return map[string]any{"sources": sources}, nil
+}
+
+// skipped names a Source a command did not analyse, and why.
+type skipped struct {
+	Source string `json:"source"`
+	Reason string `json:"reason"`
+}
+
+// eachVideo probes the Footage named by args and calls fn for every
+// distinct video Source, collecting the rest (and fn's failures) as skipped.
+func eachVideo(ctx context.Context, cmd string, args []string, fn func(analysis.Cache, probe.Source) error) ([]skipped, error) {
+	if len(args) == 0 {
+		return nil, usageErr(fmt.Sprintf("usage: porcelain %s <dir|file>...", cmd))
+	}
+	paths, err := probe.Expand(args)
+	if err != nil {
+		return nil, err
+	}
+	cache, err := analysis.DefaultCache()
+	if err != nil {
+		return nil, err
+	}
+	skips := []skipped{}
+	for _, src := range probe.Probe(ctx, paths) {
+		var reason string
+		switch {
+		case src.Error != "":
+			reason = src.Error
+		case src.DuplicateOf != "":
+			reason = "duplicate of " + src.DuplicateOf
+		case src.Kind == probe.KindStill:
+			reason = "Still: view the file directly"
+		case src.Kind != probe.KindVideo:
+			reason = fmt.Sprintf("not a video Source (kind %s)", src.Kind)
+		default:
+			if err := fn(cache, src); err != nil {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				reason = err.Error()
+			}
+		}
+		if reason != "" {
+			skips = append(skips, skipped{Source: src.Path, Reason: reason})
+		}
+	}
+	return skips, nil
+}
+
+func shotsCmd(ctx context.Context, args []string) (any, error) {
+	shots := []analysis.Shot{}
+	skips, err := eachVideo(ctx, "shots", args, func(c analysis.Cache, src probe.Source) error {
+		s, err := analysis.Shots(ctx, c, src)
+		if err != nil {
+			return err
+		}
+		shots = append(shots, s...)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"shots": shots, "skipped": skips}, nil
+}
+
+func contactSheetCmd(ctx context.Context, args []string) (any, error) {
+	sheets := []analysis.ContactSheet{}
+	skips, err := eachVideo(ctx, "contact-sheet", args, func(c analysis.Cache, src probe.Source) error {
+		shots, err := analysis.Shots(ctx, c, src)
+		if err != nil {
+			return err
+		}
+		s, err := analysis.ContactSheets(ctx, c, src, shots)
+		if err != nil {
+			return err
+		}
+		sheets = append(sheets, s...)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"contact_sheets": sheets, "skipped": skips}, nil
 }
 
 func validateCmd(ctx context.Context, args []string) (any, error) {

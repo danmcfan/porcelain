@@ -26,7 +26,7 @@ bin/porcelain timeline validate timeline.json
 bin/porcelain render timeline.json -o render.mp4
 ```
 
-The Timeline format is [`skill/porcelain/timeline.schema.json`](skill/porcelain/timeline.schema.json). `shots`, `contact-sheet`, `analyze-song` and `export` are reserved and exit 2 with `not_implemented`.
+The Timeline format is [`skill/porcelain/timeline.schema.json`](skill/porcelain/timeline.schema.json). `analyze-song` and `export` are reserved and exit 2 with `not_implemented`.
 
 ## Development
 

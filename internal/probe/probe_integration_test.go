@@ -25,8 +25,8 @@ func TestProbeFixtures(t *testing.T) {
 	if _, ok := got[".DS_Store"]; ok {
 		t.Error(".DS_Store should be skipped")
 	}
-	if len(got) != 6 {
-		t.Errorf("got %d Sources, want 6", len(got))
+	if len(got) != 7 {
+		t.Errorf("got %d Sources, want 7", len(got))
 	}
 
 	rot := got["IMG_0001.MOV"]

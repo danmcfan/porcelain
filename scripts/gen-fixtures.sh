@@ -42,6 +42,10 @@ ff -f lavfi -i "$(src 320x180 60000/1001 2)" -f lavfi -i "$(tone 440 2)" -c:v li
 # Byte-identical duplicate, named the way macOS names copies.
 cp "$fx/IMG_0002.MP4" "$fx/IMG_0002 2.MP4"
 
+# Two Shots: 1.5 s of testsrc2 then a hard cut to 1.5 s of SMPTE bars.
+ff -f lavfi -i "$(src 320x180 30 1.5)" -f lavfi -i "smptebars=size=320x180:rate=30:duration=1.5" \
+  -filter_complex "[0:v][1:v]concat=n=2:v=1[v]" -map "[v]" -c:v libx264 -pix_fmt yuv420p "$fx/IMG_0006.MP4"
+
 # A Still.
 ff -f lavfi -i "testsrc2=size=320x240:duration=1" -frames:v 1 "$fx/IMG_0005.JPG"
 

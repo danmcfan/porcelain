@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -140,4 +141,34 @@ func Probe(ctx context.Context, path string) (*ProbeResult, error) {
 		return nil, fmt.Errorf("decode ffprobe output for %s: %w", path, err)
 	}
 	return &r, nil
+}
+
+// SceneChanges returns the times, in seconds, of frames in path whose scene
+// score exceeds threshold (0-1), using ffmpeg's scene detection.
+func SceneChanges(ctx context.Context, path string, threshold float64) ([]float64, error) {
+	out, err := output(ctx, "ffmpeg", []string{
+		"-hide_banner", "-nostdin", "-v", "error", "-i", path, "-map", "0:v:0",
+		"-vf", fmt.Sprintf("select='gt(scene,%g)',metadata=print:file=-", threshold),
+		"-f", "null", "-",
+	})
+	if err != nil {
+		return nil, err
+	}
+	return parseSceneTimes(string(out)), nil
+}
+
+// parseSceneTimes reads pts_time from metadata=print lines such as
+// "frame:44   pts:45045   pts_time:1.5015".
+func parseSceneTimes(out string) []float64 {
+	var times []float64
+	for _, line := range strings.Split(out, "\n") {
+		for _, f := range strings.Fields(line) {
+			if v, ok := strings.CutPrefix(f, "pts_time:"); ok {
+				if t, err := strconv.ParseFloat(v, 64); err == nil {
+					times = append(times, t)
+				}
+			}
+		}
+	}
+	return times
 }
