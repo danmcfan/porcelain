@@ -98,7 +98,7 @@ func FCPXML(t *timeline.Timeline, srcs Sources, w io.Writer) (*Report, error) {
 		Formats: []fcpFormat{{ID: "r1", FrameDuration: seq.t(1), Width: width, Height: height}},
 	}
 	nextID := func() string { return fmt.Sprintf("r%d", len(doc.Formats)+len(doc.Assets)+1) }
-	formats := map[string]string{} // frameDuration (or "still") -> id
+	formats := map[string]string{} // "frameDuration WxH" (or "still WxH") -> id
 	format := func(key string, f fcpFormat) string {
 		if id, ok := formats[key]; ok {
 			return id
@@ -117,10 +117,13 @@ func FCPXML(t *timeline.Timeline, srcs Sources, w io.Writer) (*Report, error) {
 		switch src.Kind {
 		case probe.KindStill:
 			a.HasVideo, a.Duration = 1, "0s"
-			a.Format = format("still", fcpFormat{Name: "FFVideoFormatRateUndefined", Width: src.Width, Height: src.Height})
+			a.Format = format(fmt.Sprintf("still %dx%d", src.Width, src.Height), fcpFormat{Name: "FFVideoFormatRateUndefined", Width: src.Width, Height: src.Height})
 		case probe.KindVideo:
 			a.HasVideo, a.HasAudio = 1, boolInt(src.AudioStream != nil)
-			a.Format = format(r.t(1), fcpFormat{FrameDuration: r.t(1)})
+			// Width and height are upright (rotation applied), so portrait
+			// phone Footage is not mistaken for landscape.
+			f := fcpFormat{FrameDuration: r.t(1), Width: src.Width, Height: src.Height}
+			a.Format = format(fmt.Sprintf("%s %dx%d", f.FrameDuration, f.Width, f.Height), f)
 		default:
 			a.HasAudio = 1
 		}

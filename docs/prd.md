@@ -140,7 +140,7 @@ Acceptance criteria (original, truncated): "Given a folder containing multiple u
 - Export the Timeline as FCPXML (Final Cut Pro) and OpenTimelineIO (Resolve, Premiere via adapters). **(added)**
 - iMovie cannot import FCPXML; iMovie, CapCut, TikTok and Instagram Edits users get the rendered MP4. **(added)**
 - Export reports any Effect or Look the target format cannot represent. **(added)**
-- Acceptance: an exported FCPXML opens in Final Cut Pro with Clips at the same in/out points and Timeline positions. **(added)**
+- Acceptance: an exported FCPXML and OTIO open in DaVinci Resolve (free, imports both) with Clips at the same in/out points and Timeline positions. Final Cut Pro remains the FCPXML target; Resolve is the check because it needs no paid licence. **(added)**
 
 ### FR-10: Variations (added)
 

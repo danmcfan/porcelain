@@ -29,6 +29,7 @@ var sources = fakeSources{
 	"/f/a.mov":    {Path: "/f/a.mov", Kind: probe.KindVideo, FPS: 59.94, Duration: 10, Width: 1080, Height: 1920},
 	"/f/b.mp4":    {Path: "/f/b.mp4", Kind: probe.KindVideo, FPS: 30, Duration: 5, Width: 1920, Height: 1080},
 	"/f/c.jpg":    {Path: "/f/c.jpg", Kind: probe.KindStill, Width: 4032, Height: 3024},
+	"/f/d.heic":   {Path: "/f/d.heic", Kind: probe.KindStill, Width: 3024, Height: 4032},
 	"/s/song.wav": {Path: "/s/song.wav", Kind: probe.KindAudio, Duration: 60},
 }
 
@@ -66,8 +67,9 @@ type xFCPXML struct {
 			Height        string `xml:"height,attr"`
 		} `xml:"format"`
 		Assets []struct {
-			ID  string `xml:"id,attr"`
-			Rep struct {
+			ID     string `xml:"id,attr"`
+			Format string `xml:"format,attr"`
+			Rep    struct {
 				Src string `xml:"src,attr"`
 			} `xml:"media-rep"`
 		} `xml:"asset"`
@@ -131,6 +133,32 @@ func TestFCPXMLPlacesClipsAtTheirInPointsAndPositions(t *testing.T) {
 	}
 	if song.Offset != "30030/60000s" || song.Start != "45/30s" || song.Duration != "135/30s" {
 		t.Errorf("Song offset=%s start=%s duration=%s, want 30030/60000s 45/30s 135/30s", song.Offset, song.Start, song.Duration)
+	}
+}
+
+func TestFCPXMLFormatsCarryUprightSourceSize(t *testing.T) {
+	// a.mov is portrait phone Footage; b.mp4 landscape; c.jpg and d.heic
+	// Stills of different orientations.
+	tl := sample()
+	tl.Clips = append(tl.Clips, timeline.Clip{Source: "/f/d.heic", In: 0, Out: 1, At: 4.5})
+	var buf bytes.Buffer
+	if _, err := export.FCPXML(tl, sources, &buf); err != nil {
+		t.Fatal(err)
+	}
+	var doc xFCPXML
+	if err := xml.Unmarshal(buf.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	size := map[string]string{}
+	for _, f := range doc.Resources.Formats {
+		size[f.ID] = f.Width + "x" + f.Height
+	}
+	want := []string{"1080x1920", "1920x1080", "4032x3024", "3024x4032"}
+	for i, w := range want {
+		a := doc.Resources.Assets[i]
+		if got := size[a.Format]; got != w {
+			t.Errorf("asset %s format size = %s, want %s", a.ID, got, w)
+		}
 	}
 }
 
