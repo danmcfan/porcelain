@@ -24,9 +24,10 @@ bin/porcelain doctor
 bin/porcelain probe ~/Footage/gig
 bin/porcelain timeline validate timeline.json
 bin/porcelain render timeline.json -o render.mp4
+bin/porcelain export timeline.json --format fcpxml -o timeline.fcpxml
 ```
 
-The Timeline format is [`skill/porcelain/timeline.schema.json`](skill/porcelain/timeline.schema.json). `analyze-song` and `export` are reserved and exit 2 with `not_implemented`.
+The Timeline format is [`skill/porcelain/timeline.schema.json`](skill/porcelain/timeline.schema.json). `analyze-song` is reserved and exits 2 with `not_implemented`.
 
 ## Development
 

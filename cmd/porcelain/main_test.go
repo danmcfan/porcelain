@@ -8,7 +8,7 @@ import (
 )
 
 func TestStubsReturnNotImplemented(t *testing.T) {
-	for _, cmd := range []string{"analyze-song", "export"} {
+	for _, cmd := range []string{"analyze-song"} {
 		var stdout, stderr bytes.Buffer
 		code := run(context.Background(), []string{cmd}, &stdout, &stderr)
 		var e cliError

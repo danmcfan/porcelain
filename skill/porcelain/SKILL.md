@@ -20,8 +20,9 @@ Use `porcelain` if it is on `PATH`; otherwise `bin/porcelain` (`bin/porcelain.ex
 5. **Write the Timeline.** Write `timeline.json` following `timeline.schema.json` beside this file. Done when it expresses the Creative Prompt and Brand Kit and every Clip obeys the rules below.
 6. **Validate.** Run `porcelain timeline validate timeline.json`. Done when it prints `"valid": true`. Each entry in `details` names a `field` and a `message`: fix exactly those and re-run.
 7. **Render.** Run `porcelain render timeline.json -o render.mp4`. Done when it prints the output path and duration.
-8. **Show the user** the Render path and a one-paragraph summary of your choices (which moments, why, how the cuts follow the Song).
-9. **Iterate.** For a change, edit the same `timeline.json` and repeat steps 6 to 8. For a Variation (a different take on the same Footage), write a new Timeline file such as `timeline-v2.json` and render it to its own output, keeping the earlier one intact.
+8. **Export (if asked).** When the user wants to keep editing in an NLE, run `porcelain export timeline.json --format fcpxml -o timeline.fcpxml` for Final Cut Pro, or `--format otio -o timeline.otio` for DaVinci Resolve, Premiere (via an OTIO adapter) and others. iMovie, CapCut, TikTok and Instagram Edits cannot import either: give those users the Render. Done when it prints the output path. Tell the user about every entry in `dropped` (Effects and Text Layers the format cannot carry) so they can redo it in the editor. The export links to the original Footage by absolute path, so it must stay where it is.
+9. **Show the user** the Render path and a one-paragraph summary of your choices (which moments, why, how the cuts follow the Song).
+10. **Iterate.** For a change, edit the same `timeline.json` and repeat steps 6 to 9. For a Variation (a different take on the same Footage), write a new Timeline file such as `timeline-v2.json` and render it to its own output, keeping the earlier one intact.
 
 ## Timeline rules
 
@@ -31,7 +32,6 @@ Use `porcelain` if it is on `PATH`; otherwise `bin/porcelain` (`bin/porcelain.ex
 - `out` stays within the Source's `duration`. For a Still, `in` is 0 and `out` is how long it is shown.
 - The Song is the only audio; Source audio is dropped. `song.start` skips into the Song. The Timeline may be shorter than the Song (the Song is cut off) but never longer.
 - *Not rendered yet:* `effects` on Clips and `text_layers`. They validate, but render refuses them with `not_implemented`; leave them out of anything you render.
-- *Not implemented yet:* `porcelain export` (platform-specific delivery). Hand the user the Render instead.
 
 ## Example
 

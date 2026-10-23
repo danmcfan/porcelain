@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"os/signal"
 
 	"github.com/danmcfan/porcelain/internal/analysis"
+	"github.com/danmcfan/porcelain/internal/export"
 	"github.com/danmcfan/porcelain/internal/ffmpeg"
 	"github.com/danmcfan/porcelain/internal/probe"
 	"github.com/danmcfan/porcelain/internal/render"
@@ -40,9 +42,10 @@ Usage:
   porcelain contact-sheet <dir|file>...    grid images of each Source's Shots
   porcelain timeline validate <file.json>  check a Timeline against the schema and Footage
   porcelain render <timeline.json> -o out.mp4
+  porcelain export <timeline.json> --format fcpxml|otio -o <file>
   porcelain version
 
-Not implemented yet (exit 2): analyze-song, export
+Not implemented yet (exit 2): analyze-song
 
 Proxies, Shots and Contact Sheets are cached in $PORCELAIN_CACHE
 (default: the user cache directory), keyed by Source content hash.
@@ -114,7 +117,9 @@ func dispatch(ctx context.Context, args []string) (any, error) {
 		return shotsCmd(ctx, rest)
 	case "contact-sheet":
 		return contactSheetCmd(ctx, rest)
-	case "analyze-song", "export":
+	case "export":
+		return exportCmd(ctx, rest)
+	case "analyze-song":
 		return nil, fail(exitNotImplemented, "not_implemented",
 			fmt.Errorf("porcelain %s is not implemented yet", cmd), nil)
 	case "version", "--version":
@@ -254,11 +259,10 @@ func validateCmd(ctx context.Context, args []string) (any, error) {
 	return map[string]any{"valid": true, "duration": t.Duration(), "clips": len(t.Clips)}, nil
 }
 
-func renderCmd(ctx context.Context, args []string) (any, error) {
-	fs := flag.NewFlagSet("render", flag.ContinueOnError)
+// parseInterleaved parses fs, accepting positional arguments before or
+// after flags.
+func parseInterleaved(fs *flag.FlagSet, args []string) ([]string, error) {
 	fs.SetOutput(io.Discard)
-	out := fs.String("o", "", "output .mp4 path")
-	// Accept the Timeline before or after flags.
 	var positional []string
 	for len(args) > 0 {
 		if err := fs.Parse(args); err != nil {
@@ -269,6 +273,16 @@ func renderCmd(ctx context.Context, args []string) (any, error) {
 			positional = append(positional, args[0])
 			args = args[1:]
 		}
+	}
+	return positional, nil
+}
+
+func renderCmd(ctx context.Context, args []string) (any, error) {
+	fs := flag.NewFlagSet("render", flag.ContinueOnError)
+	out := fs.String("o", "", "output .mp4 path")
+	positional, err := parseInterleaved(fs, args)
+	if err != nil {
+		return nil, err
 	}
 	if len(positional) != 1 || *out == "" {
 		return nil, usageErr("usage: porcelain render <timeline.json> -o out.mp4")
@@ -288,4 +302,42 @@ func renderCmd(ctx context.Context, args []string) (any, error) {
 		return nil, fail(exitError, "render_failed", err, nil)
 	}
 	return res, nil
+}
+
+func exportCmd(ctx context.Context, args []string) (any, error) {
+	const use = "usage: porcelain export <timeline.json> --format fcpxml|otio -o <file>"
+	fs := flag.NewFlagSet("export", flag.ContinueOnError)
+	format := fs.String("format", "", "fcpxml or otio")
+	out := fs.String("o", "", "output path")
+	positional, err := parseInterleaved(fs, args)
+	if err != nil {
+		return nil, err
+	}
+	writers := map[string]func(*timeline.Timeline, export.Sources, io.Writer) (*export.Report, error){
+		"fcpxml": export.FCPXML,
+		"otio":   export.OTIO,
+	}
+	write, ok := writers[*format]
+	if len(positional) != 1 || *out == "" || !ok {
+		return nil, usageErr(use)
+	}
+	t, err := timeline.Load(positional[0])
+	if err != nil {
+		return nil, fail(exitError, "invalid_timeline", err, nil)
+	}
+	media := probe.NewMedia(ctx)
+	if ps := timeline.Validate(t, media); len(ps) > 0 {
+		return nil, fail(exitError, "invalid_timeline",
+			fmt.Errorf("%d problem(s) in %s", len(ps), positional[0]), ps)
+	}
+	var buf bytes.Buffer
+	rep, err := write(t, media, &buf)
+	if err == nil {
+		err = os.WriteFile(*out, buf.Bytes(), 0o644)
+	}
+	if err != nil {
+		return nil, fail(exitError, "export_failed", err, nil)
+	}
+	return map[string]any{"output": *out, "format": rep.Format, "clips": rep.Clips,
+		"duration": rep.Duration, "dropped": rep.Dropped}, nil
 }
