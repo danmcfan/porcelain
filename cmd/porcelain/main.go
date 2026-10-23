@@ -15,6 +15,7 @@ import (
 	"os/signal"
 
 	"github.com/danmcfan/porcelain/internal/analysis"
+	"github.com/danmcfan/porcelain/internal/brandkit"
 	"github.com/danmcfan/porcelain/internal/export"
 	"github.com/danmcfan/porcelain/internal/ffmpeg"
 	"github.com/danmcfan/porcelain/internal/probe"
@@ -45,10 +46,14 @@ Usage:
   porcelain render <timeline.json> -o out.mp4
   porcelain export <timeline.json> --format fcpxml|otio -o <file>
   porcelain analyze-song <song>            tempo, Beats, Downbeats, Bar energy, Sections
+  porcelain brand-kit save <kit.json>      check and save the Brand Kit for every new Timeline
+  porcelain brand-kit show                 print the saved Brand Kit
   porcelain version
 
 Proxies, Shots and Contact Sheets are cached in $PORCELAIN_CACHE
 (default: the user cache directory), keyed by Source content hash.
+The Brand Kit is saved to $PORCELAIN_BRAND_KIT
+(default: porcelain/brandkit.json in the user config directory).
 `
 
 // cliError is the JSON shape of every error.
@@ -121,6 +126,8 @@ func dispatch(ctx context.Context, args []string) (any, error) {
 		return exportCmd(ctx, rest)
 	case "analyze-song":
 		return analyzeSongCmd(ctx, rest)
+	case "brand-kit":
+		return brandKitCmd(rest)
 	case "version", "--version":
 		return map[string]string{"version": version}, nil
 	case "help", "-h", "--help":
@@ -316,6 +323,36 @@ func renderCmd(ctx context.Context, args []string) (any, error) {
 		return nil, fail(exitError, "render_failed", err, nil)
 	}
 	return res, nil
+}
+
+func brandKitCmd(args []string) (any, error) {
+	const use = "usage: porcelain brand-kit save <kit.json> | porcelain brand-kit show"
+	path, err := brandkit.DefaultPath()
+	if err != nil {
+		return nil, err
+	}
+	var k *brandkit.BrandKit
+	switch {
+	case len(args) == 2 && args[0] == "save":
+		if k, err = brandkit.Load(args[1]); err == nil {
+			err = brandkit.Save(k, path)
+		}
+	case len(args) == 1 && args[0] == "show":
+		k, err = brandkit.Load(path)
+	default:
+		return nil, usageErr(use)
+	}
+	var inv *brandkit.InvalidError
+	switch {
+	case errors.As(err, &inv):
+		return nil, fail(exitError, "invalid_brand_kit", err, inv.Problems)
+	case errors.Is(err, brandkit.ErrNotSaved) && args[0] == "show":
+		return nil, fail(exitError, "no_brand_kit",
+			fmt.Errorf("%w: ask the user for band name, font files, logo, colors and Look, then run porcelain brand-kit save", err), nil)
+	case err != nil:
+		return nil, fail(exitError, "invalid_brand_kit", err, nil)
+	}
+	return map[string]any{"path": path, "brand_kit": k}, nil
 }
 
 func exportCmd(ctx context.Context, args []string) (any, error) {

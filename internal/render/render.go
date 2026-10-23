@@ -5,11 +5,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/danmcfan/porcelain/internal/ffmpeg"
 	"github.com/danmcfan/porcelain/internal/probe"
+	"github.com/danmcfan/porcelain/internal/text"
 	"github.com/danmcfan/porcelain/internal/timeline"
 )
 
@@ -43,15 +48,21 @@ func Render(ctx context.Context, t *timeline.Timeline, out string) (*Result, err
 	if ps := timeline.Validate(t, media); len(ps) > 0 {
 		return nil, &InvalidError{Problems: ps}
 	}
-	if len(t.TextLayers) > 0 {
-		return nil, fmt.Errorf("text_layers: %w", ErrNotSupported)
-	}
 	for i, c := range t.Clips {
 		if len(c.Effects) > 0 {
 			return nil, fmt.Errorf("clips[%d].effects: %w", i, ErrNotSupported)
 		}
 	}
-	args, err := Args(t, media, out)
+	dir, err := os.MkdirTemp("", "porcelain-text-")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = os.RemoveAll(dir) }()
+	overlays, err := writeTextLayers(t, dir)
+	if err != nil {
+		return nil, err
+	}
+	args, err := Args(t, media, overlays, out)
 	if err != nil {
 		return nil, err
 	}
@@ -62,11 +73,54 @@ func Render(ctx context.Context, t *timeline.Timeline, out string) (*Result, err
 	return &Result{Output: out, Duration: t.Duration(), Width: w, Height: h, FPS: t.Output.FPS, Clips: len(t.Clips)}, nil
 }
 
+// writeTextLayers rasterizes each Text Layer to a full-frame transparent PNG
+// in dir and returns their paths, in Timeline order.
+func writeTextLayers(t *timeline.Timeline, dir string) ([]string, error) {
+	w, h := t.Output.Size()
+	paths := make([]string, len(t.TextLayers))
+	for i, l := range t.TextLayers {
+		f, err := text.LoadFont(l.Font)
+		if err != nil {
+			return nil, fmt.Errorf("text_layers[%d]: %w", i, err)
+		}
+		c, err := text.ParseColor(l.Color)
+		if err != nil {
+			return nil, fmt.Errorf("text_layers[%d]: %w", i, err)
+		}
+		size := l.Size
+		if size == 0 {
+			size = float64(h) * timeline.DefaultTextSize
+		}
+		img, err := text.Rasterize(text.Layer{Font: f, Text: l.Text, Size: size, Color: c, Position: l.Position}, w, h)
+		if err != nil {
+			return nil, fmt.Errorf("text_layers[%d]: %w", i, err)
+		}
+		paths[i] = filepath.Join(dir, fmt.Sprintf("text%d.png", i))
+		if err := writePNG(paths[i], img); err != nil {
+			return nil, err
+		}
+	}
+	return paths, nil
+}
+
+func writePNG(path string, img image.Image) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	if err := png.Encode(f, img); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
+}
+
 // Args builds the ffmpeg arguments for a validated Timeline: one input per
 // Clip (trimmed at the demuxer), each scaled to cover the frame,
 // center-cropped, resampled to constant fps, concatenated, with the Song as
-// the only audio.
-func Args(t *timeline.Timeline, media *probe.Media, out string) ([]string, error) {
+// the only audio. overlays holds one full-frame PNG per Text Layer, laid
+// over the result while the layer is on screen.
+func Args(t *timeline.Timeline, media *probe.Media, overlays []string, out string) ([]string, error) {
 	w, h := t.Output.Size()
 	fps := strconv.Itoa(t.Output.FPS)
 	var args []string
@@ -95,6 +149,11 @@ func Args(t *timeline.Timeline, media *probe.Media, out string) ([]string, error
 	total := secs(t.Duration())
 	song := len(t.Clips)
 	args = append(args, "-ss", secs(t.Song.Start), "-t", total, "-i", t.Song.Path)
+	for i, l := range t.TextLayers {
+		args = append(args, "-loop", "1", "-framerate", fps, "-t", total, "-i", overlays[i])
+		fmt.Fprintf(&graph, ";[v][%d:v]overlay=0:0:enable='gte(t,%s)*lt(t,%s)',format=yuv420p[v]",
+			song+1+i, secs(l.Start), secs(l.End))
+	}
 	args = append(args,
 		"-filter_complex", graph.String(),
 		"-map", "[v]", "-map", fmt.Sprintf("%d:a:0", song),

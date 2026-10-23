@@ -2,9 +2,33 @@ package timeline
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/image/font/gofont/goregular"
 )
+
+// fontPath is a real TTF; notFont is a file that is not a font.
+var fontPath, notFont string
+
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "timeline")
+	if err != nil {
+		panic(err)
+	}
+	fontPath, notFont = filepath.Join(dir, "go.ttf"), filepath.Join(dir, "x.ttf")
+	if err := os.WriteFile(fontPath, goregular.TTF, 0o644); err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile(notFont, []byte("not a font"), 0o644); err != nil {
+		panic(err)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
+}
 
 type fakeMedia map[string]float64 // path -> duration; negative = Still
 
@@ -36,6 +60,14 @@ func TestValidateOK(t *testing.T) {
 	}
 }
 
+func TestValidateTextLayerOK(t *testing.T) {
+	tl := valid()
+	tl.TextLayers = []TextLayer{{Text: "TOUR", End: 1, Font: fontPath, Size: 80, Color: "#ff0080"}}
+	if ps := Validate(tl, media); len(ps) != 0 {
+		t.Fatalf("unexpected problems: %v", ps)
+	}
+}
+
 func TestValidateProblems(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -57,8 +89,13 @@ func TestValidateProblems(t *testing.T) {
 		{"longer than song", func(t *Timeline) { t.Song.Start = 5 }, "clips", "longer than the Song"},
 		{"missing source", func(t *Timeline) { t.Clips[0].Source = "x.mov" }, "clips[0].source", "not readable"},
 		{"effect type", func(t *Timeline) { t.Clips[0].Effects = []Effect{{}} }, "clips[0].effects[0].type", "required"},
-		{"text end", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", Start: 2, End: 1}} }, "text_layers[0].end", "greater"},
-		{"text position", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", End: 1, Position: "left"}} }, "text_layers[0].position", "one of"},
+		{"text end", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", Start: 2, End: 1, Font: fontPath}} }, "text_layers[0].end", "greater"},
+		{"text position", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", End: 1, Font: fontPath, Position: "left"}} }, "text_layers[0].position", "one of"},
+		{"font required", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", End: 1}} }, "text_layers[0].font", "required"},
+		{"font missing", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", End: 1, Font: "nope.ttf"}} }, "text_layers[0].font", "not readable"},
+		{"not a font", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", End: 1, Font: notFont}} }, "text_layers[0].font", "not a TTF/OTF font"},
+		{"text size", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", End: 1, Font: fontPath, Size: -1}} }, "text_layers[0].size", "negative"},
+		{"text color", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", End: 1, Font: fontPath, Color: "red"}} }, "text_layers[0].color", "#RRGGBB"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

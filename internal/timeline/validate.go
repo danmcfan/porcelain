@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 	"slices"
+
+	"github.com/danmcfan/porcelain/internal/text"
 )
 
 // Problem is one validation failure, located by a JSON-path-like Field.
@@ -109,6 +111,20 @@ func Validate(t *Timeline, m Media) []Problem {
 		}
 		if l.Position != "" && !slices.Contains(Positions, l.Position) {
 			add(f+".position", "must be one of %v", Positions)
+		}
+		if l.Size < 0 {
+			add(f+".size", "must not be negative")
+		}
+		if _, err := text.ParseColor(l.Color); err != nil {
+			add(f+".color", "%v", err)
+		}
+		switch {
+		case l.Font == "":
+			add(f+".font", "is required: use a Brand Kit font")
+		case m != nil:
+			if _, err := text.LoadFont(l.Font); err != nil {
+				add(f+".font", "font not readable: %v", err)
+			}
 		}
 	}
 	return ps

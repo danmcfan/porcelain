@@ -4,9 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"math"
+	"os"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/image/font/gofont/goregular"
 
 	"github.com/danmcfan/porcelain/internal/ffmpeg"
 	"github.com/danmcfan/porcelain/internal/ffmpeg/ffmpegtest"
@@ -65,17 +70,74 @@ func TestRenderThreeClips(t *testing.T) {
 	}
 }
 
-func TestRenderRejectsTextLayers(t *testing.T) {
+func TestRenderDrawsTextLayersInTheirTimeRange(t *testing.T) {
+	fx := ffmpegtest.Fixtures(t)
+	dir := t.TempDir()
+	font := filepath.Join(dir, "band.ttf")
+	if err := os.WriteFile(font, goregular.TTF, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A Still keeps the background constant, so only the text changes.
+	tl := &timeline.Timeline{
+		SchemaVersion: timeline.SchemaVersion,
+		Output:        timeline.Output{Aspect: "1:1", FPS: 30},
+		Song:          timeline.Song{Path: filepath.Join(fx, "songs", "click-120bpm.wav")},
+		Clips:         []timeline.Clip{{Source: filepath.Join(fx, "footage", "IMG_0005.JPG"), Out: 2}},
+		TextLayers:    []timeline.TextLayer{{Text: "TOUR", End: 1, Font: font, Size: 200, Color: "#00FF00"}},
+	}
+	out := filepath.Join(dir, "out.mp4")
+	ctx := context.Background()
+	if _, err := render.Render(ctx, tl, out); err != nil {
+		t.Fatal(err)
+	}
+	with, without := frame(t, out, 0.5), frame(t, out, 1.5)
+	changed := 0
+	b := with.Bounds()
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			r1, g1, _, _ := with.At(x, y).RGBA()
+			r2, g2, _, _ := without.At(x, y).RGBA()
+			if g1>>8 > 200 && r1>>8 < 80 && (g2>>8 < 150 || r2>>8 > 120) {
+				changed++
+			}
+		}
+	}
+	// "TOUR" at 200 px covers well over 5000 pixels.
+	if changed < 5000 {
+		t.Errorf("%d green text pixels at 0.5 s that are absent at 1.5 s; want the Text Layer drawn only in [0, 1)", changed)
+	}
+}
+
+func TestRenderRejectsMissingFont(t *testing.T) {
 	fx := ffmpegtest.Fixtures(t)
 	tl := &timeline.Timeline{
 		SchemaVersion: timeline.SchemaVersion,
 		Output:        timeline.Output{Aspect: "1:1", FPS: 30},
 		Song:          timeline.Song{Path: filepath.Join(fx, "songs", "click-120bpm.wav")},
 		Clips:         []timeline.Clip{{Source: filepath.Join(fx, "footage", "IMG_0002.MP4"), Out: 1}},
-		TextLayers:    []timeline.TextLayer{{Text: "hi", End: 1}},
+		TextLayers:    []timeline.TextLayer{{Text: "hi", End: 1, Font: filepath.Join(fx, "no-such.ttf")}},
 	}
 	_, err := render.Render(context.Background(), tl, filepath.Join(t.TempDir(), "x.mp4"))
-	if err == nil || !errors.Is(err, render.ErrNotSupported) {
-		t.Fatalf("err = %v, want ErrNotSupported", err)
+	var inv *render.InvalidError
+	if !errors.As(err, &inv) || inv.Problems[0].Field != "text_layers[0].font" {
+		t.Fatalf("err = %v, want InvalidError on text_layers[0].font", err)
 	}
+}
+
+func frame(t *testing.T, video string, at float64) image.Image {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "frame.png")
+	if err := ffmpeg.Run(context.Background(), "-ss", fmt.Sprint(at), "-i", video, "-frames:v", "1", p); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Open(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	img, err := png.Decode(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return img
 }

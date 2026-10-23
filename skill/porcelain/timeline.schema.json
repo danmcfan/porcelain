@@ -67,11 +67,14 @@
     "text_layer": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["text", "start", "end"],
+      "required": ["text", "start", "end", "font"],
       "properties": {
         "text": { "type": "string", "minLength": 1 },
         "start": { "type": "number", "minimum": 0 },
         "end": { "type": "number" },
+        "font": { "type": "string", "minLength": 1, "description": "TTF/OTF path (normally a Brand Kit font), relative to the Timeline file." },
+        "size": { "type": "number", "minimum": 0, "description": "Text height in output pixels; 0 or omitted means 1/12 of the frame height." },
+        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$", "description": "Default #FFFFFF." },
         "position": { "enum": ["top", "center", "bottom"] }
       }
     }

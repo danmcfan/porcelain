@@ -61,14 +61,21 @@ type Effect struct {
 	Params map[string]any `json:"params,omitempty"`
 }
 
-// TextLayer is text drawn over the Timeline between Start and End. Not
-// rendered yet.
+// TextLayer is text drawn over the Timeline in [Start, End), in a font
+// file (normally one of the Brand Kit's).
 type TextLayer struct {
 	Text     string  `json:"text"`
 	Start    float64 `json:"start"`
 	End      float64 `json:"end"`
-	Position string  `json:"position,omitempty"` // "top", "center", "bottom"
+	Font     string  `json:"font"`               // TTF/OTF path, relative to the Timeline file
+	Size     float64 `json:"size,omitempty"`     // pixel height; default DefaultTextSize of the frame height
+	Color    string  `json:"color,omitempty"`    // "#RRGGBB"; default white
+	Position string  `json:"position,omitempty"` // "top", "center", "bottom"; default center
 }
+
+// DefaultTextSize is a TextLayer's default size as a fraction of the output
+// height.
+const DefaultTextSize = 1.0 / 12
 
 // Aspects maps each supported aspect ratio to its output resolution.
 var Aspects = map[string][2]int{
@@ -125,5 +132,8 @@ func (t *Timeline) resolve(dir string) {
 	t.Song.Path = abs(t.Song.Path)
 	for i := range t.Clips {
 		t.Clips[i].Source = abs(t.Clips[i].Source)
+	}
+	for i := range t.TextLayers {
+		t.TextLayers[i].Font = abs(t.TextLayers[i].Font)
 	}
 }
