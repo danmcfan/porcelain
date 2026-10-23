@@ -14,4 +14,4 @@ Real footage is located via the environment variable `PORCELAIN_FOOTAGE_DIR` and
 
 - Tests that need real footage skip when `PORCELAIN_FOOTAGE_DIR` is unset.
 - A newly discovered real-footage quirk is fixed by adding a Fixture that reproduces it, then a test.
-- CI needs ffmpeg installed to generate Fixtures.
+- Running the tests locally needs ffmpeg installed to generate Fixtures.
