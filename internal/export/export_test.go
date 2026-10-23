@@ -29,7 +29,6 @@ var sources = fakeSources{
 	"/f/a.mov":    {Path: "/f/a.mov", Kind: probe.KindVideo, FPS: 59.94, Duration: 10, Width: 1080, Height: 1920},
 	"/f/b.mp4":    {Path: "/f/b.mp4", Kind: probe.KindVideo, FPS: 30, Duration: 5, Width: 1920, Height: 1080},
 	"/f/c.jpg":    {Path: "/f/c.jpg", Kind: probe.KindStill, Width: 4032, Height: 3024},
-	"/f/d.heic":   {Path: "/f/d.heic", Kind: probe.KindStill, Width: 3024, Height: 4032},
 	"/s/song.wav": {Path: "/s/song.wav", Kind: probe.KindAudio, Duration: 60},
 }
 
@@ -107,7 +106,7 @@ func TestFCPXMLPlacesClipsAtTheirInPointsAndPositions(t *testing.T) {
 		// a.mov is 59.94 fps: 0.5 s in = 30 frames of 1001/60000.
 		{"asset-clip", "0s", "30030/60000s", "60/30s"},
 		{"asset-clip", "60/30s", "30/30s", "30/30s"},
-		{"video", "90/30s", "0s", "45/30s"},
+		{"clip", "90/30s", "0s", "45/30s"},
 	}
 	for i, w := range want {
 		c := spine[i]
@@ -115,6 +114,16 @@ func TestFCPXMLPlacesClipsAtTheirInPointsAndPositions(t *testing.T) {
 			t.Errorf("spine[%d] = <%s offset=%s start=%s duration=%s>, want <%s offset=%s start=%s duration=%s>",
 				i, c.XMLName.Local, c.Offset, c.Start, c.Duration, w.elem, w.offset, w.start, w.duration)
 		}
+	}
+	// A Still is a <clip> wrapping a <video> of its asset.
+	var videos []xClip
+	for _, c := range spine[2].Children {
+		if c.XMLName.Local == "video" {
+			videos = append(videos, c)
+		}
+	}
+	if len(videos) != 1 || videos[0].Ref == "" || videos[0].Duration != "45/30s" {
+		t.Errorf("Still clip videos = %+v, want one lasting 45/30s", videos)
 	}
 	if spine[0].Enable != "video" {
 		t.Errorf("Source audio not muted: srcEnable=%q", spine[0].Enable)
@@ -137,12 +146,10 @@ func TestFCPXMLPlacesClipsAtTheirInPointsAndPositions(t *testing.T) {
 }
 
 func TestFCPXMLFormatsCarryUprightSourceSize(t *testing.T) {
-	// a.mov is portrait phone Footage; b.mp4 landscape; c.jpg and d.heic
-	// Stills of different orientations.
-	tl := sample()
-	tl.Clips = append(tl.Clips, timeline.Clip{Source: "/f/d.heic", In: 0, Out: 1, At: 4.5})
+	// a.mov is portrait phone Footage, b.mp4 landscape; c.jpg is a Still,
+	// which takes no format.
 	var buf bytes.Buffer
-	if _, err := export.FCPXML(tl, sources, &buf); err != nil {
+	if _, err := export.FCPXML(sample(), sources, &buf); err != nil {
 		t.Fatal(err)
 	}
 	var doc xFCPXML
@@ -153,7 +160,7 @@ func TestFCPXMLFormatsCarryUprightSourceSize(t *testing.T) {
 	for _, f := range doc.Resources.Formats {
 		size[f.ID] = f.Width + "x" + f.Height
 	}
-	want := []string{"1080x1920", "1920x1080", "4032x3024", "3024x4032"}
+	want := []string{"1080x1920", "1920x1080", ""}
 	for i, w := range want {
 		a := doc.Resources.Assets[i]
 		if got := size[a.Format]; got != w {

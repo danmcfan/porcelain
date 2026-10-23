@@ -62,10 +62,11 @@ type fcpSequence struct {
 	Spine       []fcpClip `xml:"spine>clip"`
 }
 
-// fcpClip is an <asset-clip> (video or Song) or a <video> (Still).
+// fcpClip is an <asset-clip> (video or Song), or a <clip> wrapping the
+// <video> of a Still, the form the OTIO FCPXML adapter reads.
 type fcpClip struct {
 	XMLName   xml.Name
-	Ref       string      `xml:"ref,attr"`
+	Ref       string      `xml:"ref,attr,omitempty"`
 	Lane      string      `xml:"lane,attr,omitempty"`
 	Offset    string      `xml:"offset,attr"`
 	Name      string      `xml:"name,attr"`
@@ -73,6 +74,7 @@ type fcpClip struct {
 	Duration  string      `xml:"duration,attr"`
 	SrcEnable string      `xml:"srcEnable,attr,omitempty"`
 	Conform   *fcpConform `xml:"adjust-conform"`
+	Video     *fcpClip    `xml:"video"`
 	Connected []fcpClip   `xml:"asset-clip"`
 }
 
@@ -98,7 +100,7 @@ func FCPXML(t *timeline.Timeline, srcs Sources, w io.Writer) (*Report, error) {
 		Formats: []fcpFormat{{ID: "r1", FrameDuration: seq.t(1), Width: width, Height: height}},
 	}
 	nextID := func() string { return fmt.Sprintf("r%d", len(doc.Formats)+len(doc.Assets)+1) }
-	formats := map[string]string{} // "frameDuration WxH" (or "still WxH") -> id
+	formats := map[string]string{} // "frameDuration WxH" -> id
 	format := func(key string, f fcpFormat) string {
 		if id, ok := formats[key]; ok {
 			return id
@@ -117,7 +119,8 @@ func FCPXML(t *timeline.Timeline, srcs Sources, w io.Writer) (*Report, error) {
 		switch src.Kind {
 		case probe.KindStill:
 			a.HasVideo, a.Duration = 1, "0s"
-			a.Format = format(fmt.Sprintf("still %dx%d", src.Width, src.Height), fcpFormat{Name: "FFVideoFormatRateUndefined", Width: src.Width, Height: src.Height})
+			// No format: Final Cut reads a Still's size from the file, and
+			// OTIO's FCPXML adapter needs a frameDuration Stills lack.
 		case probe.KindVideo:
 			a.HasVideo, a.HasAudio = 1, boolInt(src.AudioStream != nil)
 			// Width and height are upright (rotation applied), so portrait
@@ -148,8 +151,9 @@ func FCPXML(t *timeline.Timeline, srcs Sources, w io.Writer) (*Report, error) {
 			Conform:  &fcpConform{Type: "fill"},
 		}
 		if src.Kind == probe.KindStill {
-			item.XMLName.Local, item.Start = "video", "0s"
-			item.Ref = asset(src, seq)
+			item.XMLName.Local, item.Start = "clip", "0s"
+			item.Video = &fcpClip{XMLName: xml.Name{Local: "video"}, Ref: asset(src, seq),
+				Offset: "0s", Name: item.Name, Start: "0s", Duration: item.Duration}
 		} else {
 			r := sourceRate(src.FPS, seq)
 			item.XMLName.Local, item.Start, item.SrcEnable = "asset-clip", r.t(r.frames(c.In)), "video"
