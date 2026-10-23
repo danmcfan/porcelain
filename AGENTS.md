@@ -20,3 +20,7 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 - Real-footage quirks (rotation, audio streams, frame rates, duplicates): `docs/footage.md`.
 - Review rules: `CODING_STANDARDS.md`.
 - Code: `cmd/` + `internal/`. The Skill the Harness runs: `skill/`.
+
+## Validate every change
+
+Run `make lint test` after changing code and before reporting it done; both must pass. There is no CI and no commit hook, so this is the only check.

@@ -40,4 +40,3 @@ The Timeline format is [`skill/porcelain/timeline.schema.json`](skill/porcelain/
 | `make dist` | cross-compile darwin/linux/windows, amd64 + arm64, into `dist/` |
 | `make skill` | assemble `dist/skill/porcelain/` (SKILL.md, schema, host binary) |
 
-`pre-commit install` enables the gofmt, lint and short-test hooks.
