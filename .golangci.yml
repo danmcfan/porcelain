@@ -1,0 +1,48 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - revive
+    - misspell
+    - errorlint
+    - bodyclose
+    - depguard
+  settings:
+    depguard:
+      rules:
+        # All ffmpeg/ffprobe invocations go through internal/ffmpeg (and its
+        # test helpers). Nothing else may start processes.
+        single-ffmpeg-package:
+          files:
+            - "$all"
+            - "!**/internal/ffmpeg/**"
+          deny:
+            - pkg: os/exec
+              desc: "run ffmpeg/ffprobe through github.com/danmcfan/porcelain/internal/ffmpeg"
+    revive:
+      rules:
+        - name: exported
+        - name: package-comments
+        - name: var-naming
+        - name: error-strings
+        - name: error-return
+        - name: indent-error-flow
+        - name: unused-parameter
+  exclusions:
+    presets:
+      - std-error-handling
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/danmcfan/porcelain

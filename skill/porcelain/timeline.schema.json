@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/danmcfan/porcelain/skill/porcelain/timeline.schema.json",
+  "title": "porcelain Timeline",
+  "description": "The single source of truth for one edit. Clips play in array order, back to back from 0; the Song is the only audio. Paths are relative to the timeline.json file. Validate with `porcelain timeline validate`.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "output", "song", "clips"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aspect", "fps"],
+      "properties": {
+        "aspect": { "enum": ["9:16", "1:1", "16:9"], "description": "9:16 renders 1080x1920, 1:1 1080x1080, 16:9 1920x1080. Sources are scaled to cover and center-cropped." },
+        "fps": { "enum": [24, 25, 30, 50, 60], "description": "Constant output frame rate; Sources are resampled to it." }
+      }
+    },
+    "song": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "start": { "type": "number", "minimum": 0, "description": "Offset into the Song, in seconds, heard at Timeline time 0." }
+      }
+    },
+    "clips": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/clip" }
+    },
+    "text_layers": {
+      "type": "array",
+      "description": "Not rendered yet: render rejects a Timeline that has any.",
+      "items": { "$ref": "#/$defs/text_layer" }
+    },
+    "notes": { "type": "string", "description": "Free text for the Harness; ignored by render." }
+  },
+  "$defs": {
+    "clip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "in", "out", "at"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1, "description": "Path to the Source." },
+        "in": { "type": "number", "minimum": 0, "description": "Source time, seconds, where the Clip starts." },
+        "out": { "type": "number", "description": "Source time, seconds, where the Clip ends; greater than in and within the Source duration. For a Still, out - in is how long it is shown." },
+        "at": { "type": "number", "minimum": 0, "description": "Timeline time the Clip starts: 0 for the first, then the previous Clip's at + (out - in)." },
+        "effects": {
+          "type": "array",
+          "description": "Not rendered yet: render rejects a Timeline that has any.",
+          "items": { "$ref": "#/$defs/effect" }
+        }
+      }
+    },
+    "effect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "minLength": 1 },
+        "params": { "type": "object" }
+      }
+    },
+    "text_layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "start", "end"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "start": { "type": "number", "minimum": 0 },
+        "end": { "type": "number" },
+        "position": { "enum": ["top", "center", "bottom"] }
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+/bin/
+/dist/
+/testdata/fixtures/
+/testdata/fixtures.tmp.*
+*.mp4
+*.MP4
+.DS_Store

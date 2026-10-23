@@ -13,3 +13,10 @@ Uses the five default triage labels: `needs-triage`, `needs-info`, `ready-for-ag
 ### Domain docs
 
 Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## Where things live
+
+- Product spec: `docs/prd.md`. Vocabulary: `GLOSSARY.md`.
+- Real-footage quirks (rotation, audio streams, frame rates, duplicates): `docs/footage.md`.
+- Review rules: `CODING_STANDARDS.md`.
+- Code: `cmd/` + `internal/`. The Skill the Harness runs: `skill/`.
