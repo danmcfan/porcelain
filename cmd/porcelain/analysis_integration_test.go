@@ -39,7 +39,7 @@ func TestShotsCommandCoversFootage(t *testing.T) {
 	for _, s := range res.Shots {
 		perSource[filepath.Base(s.Source)]++
 	}
-	want := map[string]int{"IMG_0001.MOV": 1, "IMG_0002.MP4": 1, "IMG_0003.MP4": 1, "IMG_0004.MP4": 1, "IMG_0006.MP4": 2}
+	want := map[string]int{"IMG_0001.MOV": 1, "IMG_0002.MP4": 1, "IMG_0003.MP4": 1, "IMG_0004.MP4": 1, "IMG_0006.MP4": 2, "IMG_0007.MP4": 1}
 	for name, n := range want {
 		if perSource[name] != n {
 			t.Errorf("%s: %d Shots, want %d", name, perSource[name], n)

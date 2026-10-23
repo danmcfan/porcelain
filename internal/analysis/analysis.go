@@ -21,7 +21,7 @@ import (
 // Analysis settings. Bump cacheVersion when any of these or the Contact
 // Sheet layout change, so stale cached results are not reused.
 const (
-	cacheVersion = "v1"
+	cacheVersion = "v2"
 	proxyFPS     = 30
 	proxyBox     = 640  // longest displayed side, in pixels
 	sceneLimit   = 0.3  // ffmpeg scene score that counts as a cut
@@ -30,9 +30,10 @@ const (
 
 // Contact Sheet layout.
 const (
-	SheetColumns = 4   // frames sampled per Shot
-	SheetRows    = 8   // Shots per Contact Sheet image
+	SheetColumns = 4   // frames per row
+	SheetRows    = 8   // rows per Contact Sheet image
 	CellSize     = 240 // square cell, frames letterboxed into it
+	RowSeconds   = 10  // a Shot gets one row per RowSeconds, so long takes wrap onto more rows
 )
 
 // ErrNotVideo reports a Source that has no Shots (a Still, audio, or other).
@@ -139,7 +140,9 @@ func split(path string, cuts []float64, duration float64) []Shot {
 	return shots
 }
 
-// ContactSheet is one grid image: a row per Shot, SheetColumns frames each.
+// ContactSheet is one grid image of SheetColumns frames per row. Each Shot
+// starts a new row and spans one row per RowSeconds of its length (at least
+// one), so a long Shot may continue onto the next image.
 type ContactSheet struct {
 	Source  string `json:"source"`
 	Image   string `json:"image"`
@@ -154,24 +157,27 @@ type Cell struct {
 	Time float64 `json:"time"` // Source seconds
 }
 
-// ContactSheets draws src's Shots onto one or more images, SheetRows Shots
-// per image, sampling SheetColumns evenly spaced frames from each Shot.
+// ContactSheets draws src's Shots onto one or more images, SheetRows rows
+// per image, sampling evenly spaced frames from each Shot.
 func ContactSheets(ctx context.Context, cache Cache, src probe.Source, shots []Shot) ([]ContactSheet, error) {
 	p, err := Proxy(ctx, cache, src)
 	if err != nil {
 		return nil, err
 	}
+	var cells []Cell
+	for i, s := range shots {
+		cells = append(cells, sample(i, s, src.Duration)...)
+	}
 	var sheets []ContactSheet
-	for first := 0; first < len(shots); first += SheetRows {
-		last := min(first+SheetRows, len(shots))
+	const perSheet = SheetRows * SheetColumns
+	for first := 0; first < len(cells); first += perSheet {
+		last := min(first+perSheet, len(cells))
 		sheet := ContactSheet{
 			Source:  src.Path,
 			Image:   filepath.Join(filepath.Dir(p), fmt.Sprintf("sheet-%d.jpg", len(sheets)+1)),
 			Columns: SheetColumns,
-			Rows:    last - first,
-		}
-		for i := first; i < last; i++ {
-			sheet.Cells = append(sheet.Cells, sample(i, shots[i], src.Duration)...)
+			Rows:    (last - first) / SheetColumns, // sample returns whole rows
+			Cells:   cells[first:last],
 		}
 		if _, err := os.Stat(sheet.Image); err != nil {
 			if err := drawSheet(ctx, p, sheet); err != nil {
@@ -183,13 +189,15 @@ func ContactSheets(ctx context.Context, cache Cache, src probe.Source, shots []S
 	return sheets, nil
 }
 
-// sample picks SheetColumns times at the centres of equal slices of s,
-// kept clear of the Source's last frame so a seek always finds one.
+// sample picks one row of SheetColumns times per RowSeconds of s (at least
+// one row), at the centres of equal slices of s, kept clear of the Source's
+// last frame so a seek always finds one.
 func sample(index int, s Shot, duration float64) []Cell {
 	limit := math.Max(0, duration-2.0/proxyFPS)
-	cells := make([]Cell, SheetColumns)
+	rows := max(1, int(math.Ceil((s.End-s.Start)/RowSeconds)))
+	cells := make([]Cell, rows*SheetColumns)
 	for k := range cells {
-		t := s.Start + (float64(k)+0.5)/SheetColumns*(s.End-s.Start)
+		t := s.Start + (float64(k)+0.5)/float64(len(cells))*(s.End-s.Start)
 		cells[k] = Cell{Shot: index, Time: round3(math.Min(t, limit))}
 	}
 	return cells

@@ -46,6 +46,9 @@ cp "$fx/IMG_0002.MP4" "$fx/IMG_0002 2.MP4"
 ff -f lavfi -i "$(src 320x180 30 1.5)" -f lavfi -i "smptebars=size=320x180:rate=30:duration=1.5" \
   -filter_complex "[0:v][1:v]concat=n=2:v=1[v]" -map "[v]" -c:v libx264 -pix_fmt yuv420p "$fx/IMG_0006.MP4"
 
+# A long single take: 30 s of testsrc2 with no cuts, like a phone video of a whole song.
+ff -f lavfi -i "$(src 320x180 30 30)" -c:v libx264 -pix_fmt yuv420p "$fx/IMG_0007.MP4"
+
 # A Still.
 ff -f lavfi -i "testsrc2=size=320x240:duration=1" -frames:v 1 "$fx/IMG_0005.JPG"
 

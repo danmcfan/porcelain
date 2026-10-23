@@ -15,7 +15,7 @@ Use these terms exactly, in prose and in identifiers. "Avoid" lists synonyms tha
 
 - **Shot**: a continuous segment within a Source, found by scene-change detection.
 - **Proxy**: a low-res, constant-frame-rate, rotation-applied transcode of a Source, used for analysis and preview.
-- **Contact Sheet**: a grid image of frames sampled from a Source's Shots, for the Harness to look at.
+- **Contact Sheet**: a grid image of frames sampled from a Source's Shots, for the Harness to look at. Each Shot starts a new row; long Shots wrap onto more rows so frames stay about 2.5 s apart.
 - **Beat**: a detected beat time in the Song.
 - **Section**: a labeled span of the Song (intro, verse, chorus, bridge, outro).
 

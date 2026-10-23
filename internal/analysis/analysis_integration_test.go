@@ -108,3 +108,44 @@ func TestContactSheetsHaveACellRowPerShot(t *testing.T) {
 		}
 	}
 }
+
+func TestContactSheetsCoverALongTakeEvery3Seconds(t *testing.T) {
+	ctx := context.Background()
+	cache := analysis.Cache{Dir: t.TempDir()}
+	src := source(t, "IMG_0007.MP4") // 30 s, no cuts
+	shots, err := analysis.Shots(ctx, cache, src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shots) != 1 {
+		t.Fatalf("shots = %+v, want one Shot", shots)
+	}
+	sheets, err := analysis.ContactSheets(ctx, cache, src, shots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var times []float64
+	for _, sh := range sheets {
+		if len(sh.Cells) != sh.Columns*sh.Rows {
+			t.Errorf("sheet has %d cells, want %d columns x %d rows", len(sh.Cells), sh.Columns, sh.Rows)
+		}
+		r, err := ffmpeg.Probe(ctx, sh.Image)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if w, h := r.Streams[0].Width, r.Streams[0].Height; w != sh.Columns*analysis.CellSize || h != sh.Rows*analysis.CellSize {
+			t.Errorf("image %dx%d, want %dx%d", w, h, sh.Columns*analysis.CellSize, sh.Rows*analysis.CellSize)
+		}
+		for _, c := range sh.Cells {
+			times = append(times, c.Time)
+		}
+	}
+	// At least one frame per 3 s: no gap (including from 0 and to the end) over 3 s.
+	prev := 0.0
+	for _, tm := range append(times, src.Duration) {
+		if tm-prev > 3 {
+			t.Fatalf("frames at %v leave a %.1f s gap before %.1f", times, tm-prev, tm)
+		}
+		prev = tm
+	}
+}
