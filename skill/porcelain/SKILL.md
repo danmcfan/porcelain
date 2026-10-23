@@ -34,12 +34,12 @@ Use `porcelain` if it is on `PATH`; otherwise `bin/porcelain` (`bin/porcelain.ex
 - The Song is the only audio; Source audio is dropped. `song.start` skips into the Song. The Timeline may be shorter than the Song (the Song is cut off) but never longer.
 - `text_layers` are drawn over the Clips while `start` <= t < `end` (Timeline seconds). Time them to `beats` or `sections`. `font` is a font file path, normally a Brand Kit font; a missing font fails validation, so never invent one. `size` is the text height in output pixels (default 1/12 of the frame height), `color` is `#RRGGBB` (default white), `position` is `top`, `center` (default) or `bottom`. Use `\n` in `text` for multiple lines; long lines are not wrapped, so keep them short enough for the frame.
 - `effects` on a Clip are visual treatments, each `{"type": ..., "params": {"intensity": 0 to 1}}`. Intensity 0 looks like no Effect; 1 is strongest. Each type at most once per Clip; no other params. Types, in the order Render applies them:
-  - `speed_ramp`: speed swings slow, fast, slow inside the Clip. The Clip still plays its full `in` to `out` range in the same time, so cuts stay on the Beats.
-  - `color_grade`: washed-out, contrasty, green-teal 90s grade.
-  - `vhs`: chroma bleed, softness and scanlines.
-  - `film_grain`: moving grain and a dark vignette.
-  - `glitch`: scattered frames hit by a hard color split and hue jump.
-  - `strobe`: a white flash on every Song Beat inside the Clip. Render finds the Beats itself; you need not list them.
+  - `speed_ramp`: the Clip whips in fast, slows into the middle, and whips out. The Clip still plays its full `in` to `out` range in the same time, so cuts stay on the Beats.
+  - `color_grade`: 90s film grade: faded blacks, contrasty mids, teal shadows, warm highlights, less saturation.
+  - `vhs`: soft picture, color smeared sideways, lifted blacks, tape noise and scanlines.
+  - `film_grain`: moving grain.
+  - `glitch`: short bursts of torn slices, color splits and hue jumps on scattered frames.
+  - `strobe`: an overexposed flash on every Song Beat inside the Clip, fading within a couple of frames. Render finds the Beats itself; you need not list them.
 - **Looks.** Run `porcelain looks` for the built-in Looks (`name` and `effects`). A Timeline never names a Look: to apply one, copy its `effects` onto each Clip it should cover. To treat a Section, put the Effects on every Clip that overlaps that Section's time range. Use the Brand Kit's `default_look` unless the Creative Prompt asks otherwise, and adjust intensities to taste (e.g. strobe only on `chorus` Clips). If a Clip already has an Effect of the same type, keep one.
 
 ## Example

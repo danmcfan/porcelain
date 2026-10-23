@@ -149,8 +149,8 @@ func Args(t *timeline.Timeline, media *probe.Media, overlays []string, beats []f
 			clipBeats[j] = b - c.At
 		}
 		fmt.Fprintf(&graph,
-			"[%d:v]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,setsar=1,%sfps=%s,format=yuv420p,trim=duration=%s,setpts=PTS-STARTPTS,%sformat=yuv420p[v%d];",
-			i, w, h, w, h, rampFilter(c), fps, dur, effectFilters(c, clipBeats, t.Output.FPS), i)
+			"[%d:v]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,setsar=1,%sformat=yuv420p,trim=duration=%s,setpts=PTS-STARTPTS,%sformat=yuv420p[v%d];",
+			i, w, h, w, h, resampleFilter(c, t.Output.FPS), dur, effectFilters(c, i, clipBeats, t.Output.FPS), i)
 	}
 	for i := range t.Clips {
 		fmt.Fprintf(&graph, "[v%d]", i)

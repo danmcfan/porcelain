@@ -31,13 +31,19 @@ func effectTimeline(fx string, dur float64, effects ...timeline.Effect) *timelin
 // renderFrames renders tl and returns every frame, downscaled to 64x64.
 func renderFrames(t *testing.T, tl *timeline.Timeline) []image.Image {
 	t.Helper()
+	return renderFramesVF(t, tl, "scale=64:64")
+}
+
+// renderFramesVF renders tl and returns every frame after the filter vf.
+func renderFramesVF(t *testing.T, tl *timeline.Timeline, vf string) []image.Image {
+	t.Helper()
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out.mp4")
 	if _, err := render.Render(context.Background(), tl, out); err != nil {
 		t.Fatal(err)
 	}
 	pattern := filepath.Join(dir, "f%04d.png")
-	if err := ffmpeg.Run(context.Background(), "-i", out, "-vf", "scale=64:64", pattern); err != nil {
+	if err := ffmpeg.Run(context.Background(), "-i", out, "-vf", vf, pattern); err != nil {
 		t.Fatal(err)
 	}
 	var imgs []image.Image
@@ -87,13 +93,22 @@ func maxDiff(t *testing.T, a, b []image.Image) float64 {
 
 func TestRenderEachEffectChangesFramesOnlyAboveZero(t *testing.T) {
 	fx := ffmpegtest.Fixtures(t)
-	plain := renderFrames(t, effectTimeline(fx, 1))
 	for _, typ := range timeline.EffectTypes {
 		t.Run(typ, func(t *testing.T) {
-			if d := maxDiff(t, plain, renderFrames(t, effectTimeline(fx, 1, timeline.NewEffect(typ, 0)))); d > 1 {
+			// Downscaling averages grain away, so grain is judged on a
+			// full-resolution center crop instead.
+			vf := "scale=64:64"
+			if typ == timeline.FilmGrain {
+				vf = "crop=64:64"
+			}
+			frames := func(effects ...timeline.Effect) []image.Image {
+				return renderFramesVF(t, effectTimeline(fx, 1, effects...), vf)
+			}
+			plain := frames()
+			if d := maxDiff(t, plain, frames(timeline.NewEffect(typ, 0))); d > 1 {
 				t.Errorf("intensity 0: frames differ from no Effect by %.2f, want <= 1", d)
 			}
-			if d := maxDiff(t, plain, renderFrames(t, effectTimeline(fx, 1, timeline.NewEffect(typ, 1)))); d < 5 {
+			if d := maxDiff(t, plain, frames(timeline.NewEffect(typ, 1))); d < 5 {
 				t.Errorf("intensity 1: frames differ from no Effect by only %.2f, want >= 5", d)
 			}
 		})
@@ -131,6 +146,11 @@ func TestRenderSpeedRampKeepsDurationAndEnds(t *testing.T) {
 	}
 	if d := near(ramp[59], plain[58], plain[59]); d > 2 {
 		t.Errorf("last frame differs from Source Out by %.2f", d)
+	}
+	// It starts fast and slows into the middle: 0.5 s in, it shows about
+	// Source 0.7 s.
+	if ahead, level := meanDiff(ramp[15], plain[21]), meanDiff(ramp[15], plain[15]); ahead >= level {
+		t.Errorf("frame 15 is %.2f from Source 0.7 s and %.2f from Source 0.5 s; want it ahead", ahead, level)
 	}
 }
 
