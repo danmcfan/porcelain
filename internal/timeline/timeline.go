@@ -55,10 +55,36 @@ type Clip struct {
 // Duration is the Clip's length on the Timeline.
 func (c Clip) Duration() float64 { return c.Out - c.In }
 
-// Effect is a named visual treatment on a Clip. Not rendered yet.
+// Effect is a visual treatment on one Clip (ADR 0005). Its only param is
+// "intensity", from 0 (no change) to 1 (strongest).
 type Effect struct {
 	Type   string         `json:"type"`
-	Params map[string]any `json:"params,omitempty"`
+	Params map[string]any `json:"params"`
+}
+
+// Effect types, in the order Render applies them to a Clip.
+const (
+	SpeedRamp  = "speed_ramp"
+	ColorGrade = "color_grade"
+	VHS        = "vhs"
+	FilmGrain  = "film_grain"
+	Glitch     = "glitch"
+	Strobe     = "strobe"
+)
+
+// EffectTypes lists every Effect type, in Render order.
+var EffectTypes = []string{SpeedRamp, ColorGrade, VHS, FilmGrain, Glitch, Strobe}
+
+// NewEffect returns an Effect of type typ at intensity.
+func NewEffect(typ string, intensity float64) Effect {
+	return Effect{Type: typ, Params: map[string]any{"intensity": intensity}}
+}
+
+// Intensity returns the Effect's intensity; call it only on a validated
+// Effect.
+func (e Effect) Intensity() float64 {
+	v, _ := e.Params["intensity"].(float64)
+	return v
 }
 
 // TextLayer is text drawn over the Timeline in [Start, End), in a font

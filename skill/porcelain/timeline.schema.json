@@ -33,7 +33,7 @@
     },
     "text_layers": {
       "type": "array",
-      "description": "Not rendered yet: render rejects a Timeline that has any.",
+      "description": "Text drawn over the Clips while start <= t < end.",
       "items": { "$ref": "#/$defs/text_layer" }
     },
     "notes": { "type": "string", "description": "Free text for the Harness; ignored by render." }
@@ -50,7 +50,7 @@
         "at": { "type": "number", "minimum": 0, "description": "Timeline time the Clip starts: 0 for the first, then the previous Clip's at + (out - in)." },
         "effects": {
           "type": "array",
-          "description": "Not rendered yet: render rejects a Timeline that has any.",
+          "description": "Visual treatments on this Clip, applied in a fixed order: speed_ramp, color_grade, vhs, film_grain, glitch, strobe. Each type at most once.",
           "items": { "$ref": "#/$defs/effect" }
         }
       }
@@ -58,10 +58,17 @@
     "effect": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["type"],
+      "required": ["type", "params"],
       "properties": {
-        "type": { "type": "string", "minLength": 1 },
-        "params": { "type": "object" }
+        "type": { "enum": ["speed_ramp", "color_grade", "vhs", "film_grain", "glitch", "strobe"] },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["intensity"],
+          "properties": {
+            "intensity": { "type": "number", "minimum": 0, "maximum": 1, "description": "0 looks the same as no Effect; 1 is strongest." }
+          }
+        }
       }
     },
     "text_layer": {

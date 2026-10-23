@@ -79,9 +79,30 @@ func Validate(t *Timeline, m Media) []Problem {
 			add(f+".at", "Clips must be contiguous in order: expected %g, got %g", expectAt, c.At)
 		}
 		expectAt = c.At + c.Duration()
+		seen := map[string]bool{}
 		for j, e := range c.Effects {
-			if e.Type == "" {
-				add(fmt.Sprintf("%s.effects[%d].type", f, j), "is required")
+			ef := fmt.Sprintf("%s.effects[%d]", f, j)
+			switch {
+			case e.Type == "":
+				add(ef+".type", "is required")
+			case !slices.Contains(EffectTypes, e.Type):
+				add(ef+".type", "must be one of %v, got %q", EffectTypes, e.Type)
+			case seen[e.Type]:
+				add(ef+".type", "%q is on this Clip more than once", e.Type)
+			}
+			seen[e.Type] = true
+			for k := range e.Params {
+				if k != "intensity" {
+					add(ef+".params."+k, "unknown param: Effects take only intensity")
+				}
+			}
+			switch v, ok := e.Params["intensity"]; {
+			case !ok:
+				add(ef+".params.intensity", "is required: a number from 0 to 1")
+			case !isNumber(v):
+				add(ef+".params.intensity", "must be a number, got %v", v)
+			case v.(float64) < 0 || v.(float64) > 1:
+				add(ef+".params.intensity", "must be between 0 and 1, got %g", v)
 			}
 		}
 		if m != nil && c.Source != "" {
@@ -128,4 +149,9 @@ func Validate(t *Timeline, m Media) []Problem {
 		}
 	}
 	return ps
+}
+
+func isNumber(v any) bool {
+	_, ok := v.(float64)
+	return ok
 }

@@ -60,6 +60,19 @@ func TestValidateOK(t *testing.T) {
 	}
 }
 
+func TestValidateAllEffectsOK(t *testing.T) {
+	tl := valid()
+	for _, typ := range EffectTypes {
+		tl.Clips[0].Effects = append(tl.Clips[0].Effects, NewEffect(typ, 0.5))
+	}
+	if len(tl.Clips[0].Effects) != 6 {
+		t.Fatalf("EffectTypes has %d types, want the six from FR-6", len(tl.Clips[0].Effects))
+	}
+	if ps := Validate(tl, media); len(ps) != 0 {
+		t.Fatalf("unexpected problems: %v", ps)
+	}
+}
+
 func TestValidateTextLayerOK(t *testing.T) {
 	tl := valid()
 	tl.TextLayers = []TextLayer{{Text: "TOUR", End: 1, Font: fontPath, Size: 80, Color: "#ff0080"}}
@@ -89,6 +102,17 @@ func TestValidateProblems(t *testing.T) {
 		{"longer than song", func(t *Timeline) { t.Song.Start = 5 }, "clips", "longer than the Song"},
 		{"missing source", func(t *Timeline) { t.Clips[0].Source = "x.mov" }, "clips[0].source", "not readable"},
 		{"effect type", func(t *Timeline) { t.Clips[0].Effects = []Effect{{}} }, "clips[0].effects[0].type", "required"},
+		{"effect unknown", func(t *Timeline) { t.Clips[0].Effects = []Effect{NewEffect("sepia", 1)} }, "clips[0].effects[0].type", "must be one of"},
+		{"effect param", func(t *Timeline) {
+			t.Clips[1].Effects = []Effect{{Type: "glitch", Params: map[string]any{"intensity": 0.5, "speed": 2.0}}}
+		}, "clips[1].effects[0].params.speed", "unknown param"},
+		{"effect intensity missing", func(t *Timeline) { t.Clips[0].Effects = []Effect{{Type: "vhs"}} }, "clips[0].effects[0].params.intensity", "required"},
+		{"effect intensity high", func(t *Timeline) { t.Clips[0].Effects = []Effect{NewEffect("vhs", 1.5)} }, "clips[0].effects[0].params.intensity", "between 0 and 1"},
+		{"effect intensity negative", func(t *Timeline) { t.Clips[0].Effects = []Effect{NewEffect("vhs", -0.1)} }, "clips[0].effects[0].params.intensity", "between 0 and 1"},
+		{"effect intensity not number", func(t *Timeline) {
+			t.Clips[0].Effects = []Effect{{Type: "vhs", Params: map[string]any{"intensity": "high"}}}
+		}, "clips[0].effects[0].params.intensity", "number"},
+		{"effect twice", func(t *Timeline) { t.Clips[0].Effects = []Effect{NewEffect("strobe", 1), NewEffect("strobe", 0.2)} }, "clips[0].effects[1].type", "more than once"},
 		{"text end", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", Start: 2, End: 1, Font: fontPath}} }, "text_layers[0].end", "greater"},
 		{"text position", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", End: 1, Font: fontPath, Position: "left"}} }, "text_layers[0].position", "one of"},
 		{"font required", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", End: 1}} }, "text_layers[0].font", "required"},

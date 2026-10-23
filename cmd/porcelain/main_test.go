@@ -12,6 +12,7 @@ import (
 	"golang.org/x/image/font/gofont/goregular"
 
 	"github.com/danmcfan/porcelain/internal/brandkit"
+	"github.com/danmcfan/porcelain/internal/timeline"
 )
 
 func TestAnalyzeSongErrors(t *testing.T) {
@@ -74,5 +75,40 @@ func TestBrandKitSaveThenShow(t *testing.T) {
 	}
 	if got.BrandKit.BandName != "Porcelain" || got.BrandKit.Fonts[0] != filepath.Join(dir, "band.ttf") {
 		t.Errorf("show = %s", stdout.String())
+	}
+}
+
+func TestLooksAreValidClipEffects(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := run(context.Background(), []string{"looks"}, &stdout, &stderr); code != exitOK {
+		t.Fatalf("exit %d, stderr %s", code, stderr.String())
+	}
+	var got struct {
+		Looks []struct {
+			Name    string            `json:"name"`
+			Effects []timeline.Effect `json:"effects"`
+		} `json:"looks"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("stdout is not JSON: %v\n%s", err, stdout.String())
+	}
+	names := map[string]bool{}
+	for _, l := range got.Looks {
+		names[l.Name] = true
+		tl := &timeline.Timeline{
+			SchemaVersion: timeline.SchemaVersion,
+			Output:        timeline.Output{Aspect: "9:16", FPS: 30},
+			Song:          timeline.Song{Path: "song.wav"},
+			Clips:         []timeline.Clip{{Source: "a.mov", Out: 1, Effects: l.Effects}},
+		}
+		if len(l.Effects) == 0 {
+			t.Errorf("Look %q has no Effects", l.Name)
+		}
+		if ps := timeline.Validate(tl, nil); len(ps) > 0 {
+			t.Errorf("Look %q: %v", l.Name, ps)
+		}
+	}
+	if !names["VHS"] {
+		t.Errorf("Looks %v: want a VHS Look", names)
 	}
 }

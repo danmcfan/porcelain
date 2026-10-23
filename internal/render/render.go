@@ -14,6 +14,7 @@ import (
 
 	"github.com/danmcfan/porcelain/internal/ffmpeg"
 	"github.com/danmcfan/porcelain/internal/probe"
+	"github.com/danmcfan/porcelain/internal/song"
 	"github.com/danmcfan/porcelain/internal/text"
 	"github.com/danmcfan/porcelain/internal/timeline"
 )
@@ -48,9 +49,14 @@ func Render(ctx context.Context, t *timeline.Timeline, out string) (*Result, err
 	if ps := timeline.Validate(t, media); len(ps) > 0 {
 		return nil, &InvalidError{Problems: ps}
 	}
-	for i, c := range t.Clips {
-		if len(c.Effects) > 0 {
-			return nil, fmt.Errorf("clips[%d].effects: %w", i, ErrNotSupported)
+	var beats []float64
+	if hasEffect(t, timeline.Strobe) {
+		a, err := song.Analyze(ctx, t.Song.Path)
+		if err != nil {
+			return nil, fmt.Errorf("strobe needs the Song's Beats: %w", err)
+		}
+		for _, b := range a.Beats {
+			beats = append(beats, b-t.Song.Start)
 		}
 	}
 	dir, err := os.MkdirTemp("", "porcelain-text-")
@@ -62,7 +68,7 @@ func Render(ctx context.Context, t *timeline.Timeline, out string) (*Result, err
 	if err != nil {
 		return nil, err
 	}
-	args, err := Args(t, media, overlays, out)
+	args, err := Args(t, media, overlays, beats, out)
 	if err != nil {
 		return nil, err
 	}
@@ -119,8 +125,9 @@ func writePNG(path string, img image.Image) error {
 // Clip (trimmed at the demuxer), each scaled to cover the frame,
 // center-cropped, resampled to constant fps, concatenated, with the Song as
 // the only audio. overlays holds one full-frame PNG per Text Layer, laid
-// over the result while the layer is on screen.
-func Args(t *timeline.Timeline, media *probe.Media, overlays []string, out string) ([]string, error) {
+// over the result while the layer is on screen. Each Clip's Effects are
+// applied in its own chain; beats (Timeline seconds) time strobe.
+func Args(t *timeline.Timeline, media *probe.Media, overlays []string, beats []float64, out string) ([]string, error) {
 	w, h := t.Output.Size()
 	fps := strconv.Itoa(t.Output.FPS)
 	var args []string
@@ -137,9 +144,13 @@ func Args(t *timeline.Timeline, media *probe.Media, overlays []string, out strin
 			args = append(args, "-ss", secs(c.In), "-t", dur, "-i", c.Source)
 		}
 		// ffmpeg applies display rotation on decode, so frames arrive upright.
+		clipBeats := make([]float64, len(beats))
+		for j, b := range beats {
+			clipBeats[j] = b - c.At
+		}
 		fmt.Fprintf(&graph,
-			"[%d:v]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,setsar=1,fps=%s,format=yuv420p,trim=duration=%s,setpts=PTS-STARTPTS[v%d];",
-			i, w, h, w, h, fps, dur, i)
+			"[%d:v]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,setsar=1,%sfps=%s,format=yuv420p,trim=duration=%s,setpts=PTS-STARTPTS,%sformat=yuv420p[v%d];",
+			i, w, h, w, h, rampFilter(c), fps, dur, effectFilters(c, clipBeats, t.Output.FPS), i)
 	}
 	for i := range t.Clips {
 		fmt.Fprintf(&graph, "[v%d]", i)

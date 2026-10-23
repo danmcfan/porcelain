@@ -48,6 +48,7 @@ Usage:
   porcelain analyze-song <song>            tempo, Beats, Downbeats, Bar energy, Sections
   porcelain brand-kit save <kit.json>      check and save the Brand Kit for every new Timeline
   porcelain brand-kit show                 print the saved Brand Kit
+  porcelain looks                          list the built-in Looks and their Effects
   porcelain version
 
 Proxies, Shots and Contact Sheets are cached in $PORCELAIN_CACHE
@@ -128,6 +129,11 @@ func dispatch(ctx context.Context, args []string) (any, error) {
 		return analyzeSongCmd(ctx, rest)
 	case "brand-kit":
 		return brandKitCmd(rest)
+	case "looks":
+		if len(rest) != 0 {
+			return nil, usageErr("usage: porcelain looks")
+		}
+		return map[string]any{"looks": timeline.Looks}, nil
 	case "version", "--version":
 		return map[string]string{"version": version}, nil
 	case "help", "-h", "--help":
