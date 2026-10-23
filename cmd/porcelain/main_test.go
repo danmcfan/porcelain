@@ -7,16 +7,24 @@ import (
 	"testing"
 )
 
-func TestStubsReturnNotImplemented(t *testing.T) {
-	for _, cmd := range []string{"analyze-song"} {
+func TestAnalyzeSongErrors(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		exit int
+		code string
+	}{
+		{[]string{"analyze-song"}, exitUsage, "usage"},
+		{[]string{"analyze-song", "a.wav", "b.wav"}, exitUsage, "usage"},
+		{[]string{"analyze-song", "no-such-song.wav"}, exitError, "invalid_song"},
+	} {
 		var stdout, stderr bytes.Buffer
-		code := run(context.Background(), []string{cmd}, &stdout, &stderr)
+		code := run(context.Background(), tc.args, &stdout, &stderr)
 		var e cliError
 		if err := json.Unmarshal(stderr.Bytes(), &e); err != nil {
-			t.Fatalf("%s: stderr is not JSON: %q", cmd, stderr.String())
+			t.Fatalf("%v: stderr is not JSON: %q", tc.args, stderr.String())
 		}
-		if code != exitNotImplemented || e.Code != "not_implemented" || stdout.Len() != 0 {
-			t.Errorf("%s: exit %d, code %q, stdout %q", cmd, code, e.Code, stdout.String())
+		if code != tc.exit || e.Code != tc.code || stdout.Len() != 0 {
+			t.Errorf("%v: exit %d, code %q, stdout %q", tc.args, code, e.Code, stdout.String())
 		}
 	}
 }

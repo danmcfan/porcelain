@@ -70,3 +70,21 @@ func TestContactSheetCommandWritesImages(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestAnalyzeSongCommand(t *testing.T) {
+	var res struct {
+		Tempo     float64
+		Beats     []float64
+		Downbeats []float64
+		Bars      []struct{ Start, End, Energy float64 }
+		Sections  []struct {
+			Label      string
+			Start, End float64
+		}
+	}
+	runJSON(t, &res, "analyze-song", filepath.Join(ffmpegtest.Fixtures(t), "songs", "click-120bpm.wav"))
+	if res.Tempo < 119 || res.Tempo > 121 || len(res.Beats) != 16 || len(res.Downbeats) != 4 ||
+		len(res.Bars) != 4 || len(res.Sections) != 1 {
+		t.Errorf("analyze-song = %+v", res)
+	}
+}

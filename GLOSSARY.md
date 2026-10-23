@@ -17,7 +17,9 @@ Use these terms exactly, in prose and in identifiers. "Avoid" lists synonyms tha
 - **Proxy**: a low-res, constant-frame-rate, rotation-applied transcode of a Source, used for analysis and preview.
 - **Contact Sheet**: a grid image of frames sampled from a Source's Shots, for the Harness to look at. Each Shot starts a new row; long Shots wrap onto more rows so frames stay about 2.5 s apart.
 - **Beat**: a detected beat time in the Song.
-- **Section**: a labeled span of the Song (intro, verse, chorus, bridge, outro).
+- **Downbeat**: the first Beat of a bar. porcelain assumes four Beats per bar.
+- **Bar**: the span from one Downbeat to the next, with its energy (loudness relative to the Song's loudest Bar, 0 to 1). _Avoid: measure._
+- **Section**: a labeled span of the Song (intro, verse, chorus, bridge, outro), made of whole Bars. porcelain finds and labels Sections from Bar energy; the Harness may relabel them (ADR 0006).
 
 ## The edit
 

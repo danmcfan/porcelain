@@ -19,6 +19,7 @@ import (
 	"github.com/danmcfan/porcelain/internal/ffmpeg"
 	"github.com/danmcfan/porcelain/internal/probe"
 	"github.com/danmcfan/porcelain/internal/render"
+	"github.com/danmcfan/porcelain/internal/song"
 	"github.com/danmcfan/porcelain/internal/timeline"
 )
 
@@ -43,9 +44,8 @@ Usage:
   porcelain timeline validate <file.json>  check a Timeline against the schema and Footage
   porcelain render <timeline.json> -o out.mp4
   porcelain export <timeline.json> --format fcpxml|otio -o <file>
+  porcelain analyze-song <song>            tempo, Beats, Downbeats, Bar energy, Sections
   porcelain version
-
-Not implemented yet (exit 2): analyze-song
 
 Proxies, Shots and Contact Sheets are cached in $PORCELAIN_CACHE
 (default: the user cache directory), keyed by Source content hash.
@@ -120,8 +120,7 @@ func dispatch(ctx context.Context, args []string) (any, error) {
 	case "export":
 		return exportCmd(ctx, rest)
 	case "analyze-song":
-		return nil, fail(exitNotImplemented, "not_implemented",
-			fmt.Errorf("porcelain %s is not implemented yet", cmd), nil)
+		return analyzeSongCmd(ctx, rest)
 	case "version", "--version":
 		return map[string]string{"version": version}, nil
 	case "help", "-h", "--help":
@@ -159,6 +158,21 @@ func probeCmd(ctx context.Context, args []string) (any, error) {
 	}
 	sources := probe.Probe(ctx, paths)
 	return map[string]any{"sources": sources}, nil
+}
+
+func analyzeSongCmd(ctx context.Context, args []string) (any, error) {
+	if len(args) != 1 {
+		return nil, usageErr("usage: porcelain analyze-song <song>")
+	}
+	if _, err := os.Stat(args[0]); err != nil {
+		return nil, fail(exitError, "invalid_song", fmt.Errorf("%w: check the Song path", err), nil)
+	}
+	a, err := song.Analyze(ctx, args[0])
+	if err != nil {
+		return nil, fail(exitError, "invalid_song",
+			fmt.Errorf("%w: the Song must be an audio file at least one second long", err), nil)
+	}
+	return a, nil
 }
 
 // skipped names a Source a command did not analyse, and why.

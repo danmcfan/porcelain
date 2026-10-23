@@ -6,9 +6,11 @@ package ffmpeg
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -171,4 +173,21 @@ func parseSceneTimes(out string) []float64 {
 		}
 	}
 	return times
+}
+
+// DecodeAudio decodes the first audio stream of path to mono float32 PCM
+// at the given sample rate.
+func DecodeAudio(ctx context.Context, path string, rate int) ([]float32, error) {
+	out, err := output(ctx, "ffmpeg", []string{
+		"-hide_banner", "-nostdin", "-v", "error", "-i", path, "-map", "0:a:0",
+		"-ac", "1", "-ar", strconv.Itoa(rate), "-f", "f32le", "-",
+	})
+	if err != nil {
+		return nil, err
+	}
+	samples := make([]float32, len(out)/4)
+	for i := range samples {
+		samples[i] = math.Float32frombits(binary.LittleEndian.Uint32(out[4*i:]))
+	}
+	return samples, nil
 }
