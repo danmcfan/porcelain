@@ -24,8 +24,8 @@ Use these terms exactly, in prose and in identifiers. "Avoid" lists synonyms tha
 - **Timeline**: the editable project, stored as `timeline.json`: Song, ordered Clips, Text Layers, Effects, output settings. The single source of truth (ADR 0003). _Avoid: project, edit plan, montage._
 - **Clip**: a placement on the Timeline of a Source range (in/out points) at a Timeline time. _Avoid: cut, segment._
 - **Text Layer**: a timed piece of on-screen text with a font.
-- **Effect**: a visual treatment applied to a Clip or time range.
-- **Look**: a named set of Effects (e.g. VHS, grain, distortion).
+- **Effect**: a visual treatment on one Clip, with an intensity from 0 to 1. To cover a Section, put the Effect on each Clip in it (ADR 0005). _Avoid: filter._
+- **Look**: a named set of Effects built into porcelain (e.g. VHS, grain, distortion). The Harness expands a Look into Effects on Clips; the Timeline stores the Effects, not the Look name (ADR 0005).
 - **Variation**: another Timeline made from the same Footage and Song.
 
 ## Outputs
