@@ -40,6 +40,7 @@ Use `porcelain` if it is on `PATH`; otherwise `bin/porcelain` (`bin/porcelain.ex
   - `film_grain`: moving grain.
   - `glitch`: short bursts of torn slices, color splits and hue jumps on scattered frames.
   - `strobe`: an overexposed flash on every Song Beat inside the Clip, fading within a couple of frames. Render finds the Beats itself; you need not list them.
+- `transition` on a Clip (not the first) blends the previous Clip into it: `{"type": ..., "duration": seconds}`. Types: `crossfade` (dissolve), `flash` (through white, a single hit on the cut), `dip` (through black), `zoom` (punches into the outgoing Clip), `pixelize` (blocks resolve into the next Clip). It is centred on the cut, so keep cutting on Beats; `at` values do not change. Render plays `duration/2` of extra Source after the previous Clip's `out` and before this Clip's `in`, so leave that much room in both Sources. Keep it short (a Beat or two) in fast edits; a hard cut (no `transition`) is still the default.
 - **Looks.** Run `porcelain looks` for the built-in Looks (`name` and `effects`). A Timeline never names a Look: to apply one, copy its `effects` onto each Clip it should cover. To treat a Section, put the Effects on every Clip that overlaps that Section's time range. Use the Brand Kit's `default_look` unless the Creative Prompt asks otherwise, and adjust intensities to taste (e.g. strobe only on `chorus` Clips). If a Clip already has an Effect of the same type, keep one.
 
 ## Example

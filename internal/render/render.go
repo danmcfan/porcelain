@@ -132,7 +132,14 @@ func Args(t *timeline.Timeline, media *probe.Media, overlays []string, beats []f
 	fps := strconv.Itoa(t.Output.FPS)
 	var args []string
 	var graph strings.Builder
+	lens := make([]float64, len(t.Clips))
 	for i, c := range t.Clips {
+		// A Transition plays half its length of Source past each side of
+		// the cut, so stretch the Clip to cover it.
+		pre, post := t.TransitionIn(i)/2, t.TransitionIn(i+1)/2
+		start := c.At - pre
+		c.In, c.Out = c.In-pre, c.Out+post
+		lens[i] = c.Duration()
 		src, err := media.Source(c.Source)
 		if err != nil {
 			return nil, fmt.Errorf("clips[%d]: %w", i, err)
@@ -146,16 +153,13 @@ func Args(t *timeline.Timeline, media *probe.Media, overlays []string, beats []f
 		// ffmpeg applies display rotation on decode, so frames arrive upright.
 		clipBeats := make([]float64, len(beats))
 		for j, b := range beats {
-			clipBeats[j] = b - c.At
+			clipBeats[j] = b - start
 		}
 		fmt.Fprintf(&graph,
-			"[%d:v]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,setsar=1,%sformat=yuv420p,trim=duration=%s,setpts=PTS-STARTPTS,%sformat=yuv420p[v%d];",
-			i, w, h, w, h, resampleFilter(c, t.Output.FPS), dur, effectFilters(c, i, clipBeats, t.Output.FPS), i)
+			"[%d:v]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,setsar=1,%sformat=yuv420p,trim=duration=%s,setpts=PTS-STARTPTS,%sformat=yuv420p,settb=1/%d[v%d];",
+			i, w, h, w, h, resampleFilter(c, t.Output.FPS), dur, effectFilters(c, i, clipBeats, t.Output.FPS), t.Output.FPS, i)
 	}
-	for i := range t.Clips {
-		fmt.Fprintf(&graph, "[v%d]", i)
-	}
-	fmt.Fprintf(&graph, "concat=n=%d:v=1:a=0[v]", len(t.Clips))
+	joinClips(&graph, t, lens)
 
 	total := secs(t.Duration())
 	song := len(t.Clips)
@@ -173,6 +177,43 @@ func Args(t *timeline.Timeline, media *probe.Media, overlays []string, beats []f
 		"-t", total, "-movflags", "+faststart",
 		out)
 	return args, nil
+}
+
+// joinClips writes the filters that join the Clip streams [v0], [v1], ...
+// into [v]: a Transition becomes an xfade over the overlap, other cuts a
+// concat. lens are the stretched Clip lengths.
+func joinClips(graph *strings.Builder, t *timeline.Timeline, lens []float64) {
+	if len(t.Clips) == 1 {
+		graph.WriteString("[v0]null[v]")
+		return
+	}
+	in, length := "[v0]", lens[0]
+	for i := 1; i < len(t.Clips); i++ {
+		out := fmt.Sprintf("[j%d];", i)
+		if i == len(t.Clips)-1 {
+			out = "[v]"
+		}
+		if d := t.TransitionIn(i); d > 0 {
+			fmt.Fprintf(graph, "%s[v%d]xfade=transition=%s:duration=%s:offset=%s%s",
+				in, i, xfadeNames[t.Clips[i].Transition.Type], secs(d), secs(length-d), out)
+			length += lens[i] - d
+		} else {
+			// concat outputs a microsecond timebase; xfade needs both
+			// inputs on the Clips' 1/fps.
+			fmt.Fprintf(graph, "%s[v%d]concat=n=2:v=1:a=0,settb=1/%d%s", in, i, t.Output.FPS, out)
+			length += lens[i]
+		}
+		in = fmt.Sprintf("[j%d]", i)
+	}
+}
+
+// xfadeNames maps each Transition type to its ffmpeg xfade transition.
+var xfadeNames = map[string]string{
+	timeline.Crossfade: "fade",
+	timeline.Flash:     "fadewhite",
+	timeline.Dip:       "fadeblack",
+	timeline.Zoom:      "zoomin",
+	timeline.Pixelize:  "pixelize",
 }
 
 func secs(f float64) string { return strconv.FormatFloat(f, 'f', 3, 64) }

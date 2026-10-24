@@ -108,6 +108,45 @@ func TestRenderDrawsTextLayersInTheirTimeRange(t *testing.T) {
 	}
 }
 
+func TestRenderTransitionKeepsLengthAndFlashesOnTheCut(t *testing.T) {
+	fx := ffmpegtest.Fixtures(t)
+	// IMG_0007 is 30 s of test pattern, so the Clips have Source either
+	// side of the flash at 2 s. A hard cut at 1 s comes first: the
+	// Transition must join onto a concat.
+	src := filepath.Join(fx, "footage", "IMG_0007.MP4")
+	tl := &timeline.Timeline{
+		SchemaVersion: timeline.SchemaVersion,
+		Output:        timeline.Output{Aspect: "1:1", FPS: 30},
+		Song:          timeline.Song{Path: filepath.Join(fx, "songs", "click-120bpm.wav")},
+		Clips: []timeline.Clip{
+			{Source: src, In: 5, Out: 6, At: 0},
+			{Source: src, In: 10, Out: 11, At: 1},
+			{Source: src, In: 15, Out: 17, At: 2, Transition: &timeline.Transition{Type: timeline.Flash, Duration: 0.8}},
+		},
+	}
+	out := filepath.Join(t.TempDir(), "out.mp4")
+	ctx := context.Background()
+	res, err := render.Render(ctx, tl, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Duration != 4 {
+		t.Errorf("Duration = %v, want 4: a Transition must not shorten the Timeline", res.Duration)
+	}
+	r, err := ffmpeg.Probe(ctx, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dur float64
+	if _, err := fmt.Sscan(r.Format.Duration, &dur); err != nil || math.Abs(dur-4) > 0.1 {
+		t.Errorf("file duration = %s, want ~4", r.Format.Duration)
+	}
+	// The flash peaks at white on the cut and is gone well before it.
+	if cut, before := luma(frame(t, out, 2)), luma(frame(t, out, 1.2)); cut < 200 || cut < before+60 {
+		t.Errorf("mean luma %0.f on the cut vs %0.f at 1.2 s; want a white flash centred on the cut", cut, before)
+	}
+}
+
 func TestRenderRejectsMissingFont(t *testing.T) {
 	fx := ffmpegtest.Fixtures(t)
 	tl := &timeline.Timeline{
@@ -122,6 +161,19 @@ func TestRenderRejectsMissingFont(t *testing.T) {
 	if !errors.As(err, &inv) || inv.Problems[0].Field != "text_layers[0].font" {
 		t.Fatalf("err = %v, want InvalidError on text_layers[0].font", err)
 	}
+}
+
+// luma is an image's mean brightness, 0 to 255.
+func luma(img image.Image) float64 {
+	var sum float64
+	b := img.Bounds()
+	for y := b.Min.Y; y < b.Max.Y; y++ {
+		for x := b.Min.X; x < b.Max.X; x++ {
+			r, g, bl, _ := img.At(x, y).RGBA()
+			sum += 0.299*float64(r>>8) + 0.587*float64(g>>8) + 0.114*float64(bl>>8)
+		}
+	}
+	return sum / float64(b.Dx()*b.Dy())
 }
 
 func frame(t *testing.T, video string, at float64) image.Image {

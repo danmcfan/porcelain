@@ -27,6 +27,7 @@ Use these terms exactly, in prose and in identifiers. "Avoid" lists synonyms tha
 - **Clip**: a placement on the Timeline of a Source range (in/out points) at a Timeline time. _Avoid: cut, segment._
 - **Text Layer**: a timed piece of on-screen text with a font file, size, color and position. Render rasterizes it in Go (ADR 0007).
 - **Effect**: a visual treatment on one Clip, with an intensity from 0 to 1. To cover a Section, put the Effect on each Clip in it (ADR 0005). _Avoid: filter._
+- **Transition**: a blend from one Clip into the next (crossfade, flash, dip, zoom, pixelize), set on the incoming Clip with a duration and centred on the cut (ADR 0008). _Avoid: wipe, dissolve (as the general term)._
 - **Look**: a named set of Effects built into porcelain (e.g. VHS, grain, distortion). The Harness expands a Look (listed by `porcelain looks`) into Effects on Clips; the Timeline stores the Effects, not the Look name (ADR 0005).
 - **Variation**: another Timeline made from the same Footage and Song.
 

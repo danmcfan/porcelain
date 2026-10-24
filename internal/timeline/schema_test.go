@@ -39,6 +39,9 @@ func compare(t *testing.T, at string, typ reflect.Type, n *schemaNode, defs map[
 	if n.Ref != "" {
 		n = defs[strings.TrimPrefix(n.Ref, "#/$defs/")]
 	}
+	if typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
 	switch typ.Kind() {
 	case reflect.Slice:
 		if n.Items == nil {

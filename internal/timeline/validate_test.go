@@ -73,6 +73,16 @@ func TestValidateAllEffectsOK(t *testing.T) {
 	}
 }
 
+func TestValidateTransitionOK(t *testing.T) {
+	tl := valid()
+	// Half of 1 s plays 0.5 s past a.mov's Out (3 of 5 s) and before the
+	// Still, which has no Source length.
+	tl.Clips[1].Transition = &Transition{Type: Flash, Duration: 1}
+	if ps := Validate(tl, media); len(ps) != 0 {
+		t.Fatalf("unexpected problems: %v", ps)
+	}
+}
+
 func TestValidateTextLayerOK(t *testing.T) {
 	tl := valid()
 	tl.TextLayers = []TextLayer{{Text: "TOUR", End: 1, Font: fontPath, Size: 80, Color: "#ff0080"}}
@@ -113,6 +123,17 @@ func TestValidateProblems(t *testing.T) {
 			t.Clips[0].Effects = []Effect{{Type: "vhs", Params: map[string]any{"intensity": "high"}}}
 		}, "clips[0].effects[0].params.intensity", "number"},
 		{"effect twice", func(t *Timeline) { t.Clips[0].Effects = []Effect{NewEffect("strobe", 1), NewEffect("strobe", 0.2)} }, "clips[0].effects[1].type", "more than once"},
+		{"transition type", func(t *Timeline) { t.Clips[1].Transition = &Transition{Type: "wipe", Duration: 0.5} }, "clips[1].transition.type", "must be one of"},
+		{"transition on first clip", func(t *Timeline) { t.Clips[0].Transition = &Transition{Type: Crossfade, Duration: 0.5} }, "clips[0].transition", "first Clip"},
+		{"transition duration", func(t *Timeline) { t.Clips[1].Transition = &Transition{Type: Crossfade} }, "clips[1].transition.duration", "greater than 0"},
+		{"transition longer than clip", func(t *Timeline) { t.Clips[1].Transition = &Transition{Type: Crossfade, Duration: 2.5} }, "clips[1].transition.duration", "longer than this Clip"},
+		{"transition past source end", func(t *Timeline) {
+			t.Clips[0].In, t.Clips[0].Out = 2.5, 4.5
+			t.Clips[1].Transition = &Transition{Type: Crossfade, Duration: 1.2}
+		}, "clips[1].transition.duration", "past the end of that Source"},
+		{"transition before source start", func(t *Timeline) {
+			t.Clips = []Clip{{Source: "still.jpg", Out: 1}, {Source: "a.mov", In: 0.2, Out: 2.2, At: 1, Transition: &Transition{Type: Dip, Duration: 1}}}
+		}, "clips[1].transition.duration", "before in"},
 		{"text end", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", Start: 2, End: 1, Font: fontPath}} }, "text_layers[0].end", "greater"},
 		{"text position", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", End: 1, Font: fontPath, Position: "left"}} }, "text_layers[0].position", "one of"},
 		{"font required", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", End: 1}} }, "text_layers[0].font", "required"},

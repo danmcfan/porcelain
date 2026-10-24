@@ -61,7 +61,9 @@ func Validate(t *Timeline, m Media) []Problem {
 		add("clips", "must contain at least one Clip")
 	}
 	expectAt := 0.0
+	srcLen := make([]float64, len(t.Clips)) // +Inf for a Still or unknown length
 	for i, c := range t.Clips {
+		srcLen[i] = math.Inf(1)
 		f := fmt.Sprintf("clips[%d]", i)
 		if c.Source == "" {
 			add(f+".source", "is required")
@@ -112,7 +114,38 @@ func Validate(t *Timeline, m Media) []Problem {
 				add(f+".source", "Source not readable: %v", err)
 			case !still && c.Out > d+Tolerance:
 				add(f+".out", "%g is past the end of the Source (%g s)", c.Out, d)
+			case !still:
+				srcLen[i] = d
 			}
+		}
+	}
+	for i, c := range t.Clips {
+		if c.Transition == nil {
+			continue
+		}
+		f := fmt.Sprintf("clips[%d].transition", i)
+		tr := c.Transition
+		if !slices.Contains(TransitionTypes, tr.Type) {
+			add(f+".type", "must be one of %v, got %q", TransitionTypes, tr.Type)
+		}
+		if i == 0 {
+			add(f, "the first Clip has no Clip before it to transition from")
+			continue
+		}
+		if tr.Duration <= 0 {
+			add(f+".duration", "must be greater than 0")
+			continue
+		}
+		prev, half := t.Clips[i-1], tr.Duration/2
+		if tr.Duration > c.Duration()+Tolerance || tr.Duration > prev.Duration()+Tolerance {
+			add(f+".duration", "%g is longer than this Clip (%g s) or the one before it (%g s)", tr.Duration, c.Duration(), prev.Duration())
+		}
+		// Half the Transition plays Source beyond each side of the cut.
+		if c.In-half < -Tolerance && !math.IsInf(srcLen[i], 1) {
+			add(f+".duration", "needs %g s of Source before in (%g): move in later or shorten the Transition", half, c.In)
+		}
+		if prev.Out+half > srcLen[i-1]+Tolerance {
+			add(f+".duration", "needs %g s of Source after clips[%d].out (%g), past the end of that Source (%g s): move it earlier or shorten the Transition", half, i-1, prev.Out, srcLen[i-1])
 		}
 	}
 	if total := t.Duration(); total > songLen+Tolerance {

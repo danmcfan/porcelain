@@ -50,6 +50,9 @@ type Clip struct {
 	Out     float64  `json:"out"`
 	At      float64  `json:"at"`
 	Effects []Effect `json:"effects,omitempty"`
+	// Transition blends the previous Clip into this one. The first Clip has
+	// none.
+	Transition *Transition `json:"transition,omitempty"`
 }
 
 // Duration is the Clip's length on the Timeline.
@@ -85,6 +88,35 @@ func NewEffect(typ string, intensity float64) Effect {
 func (e Effect) Intensity() float64 {
 	v, _ := e.Params["intensity"].(float64)
 	return v
+}
+
+// Transition blends one Clip into the next across Duration seconds,
+// centred on the cut: Render plays Duration/2 of Source beyond the previous
+// Clip's Out and before this Clip's In, so every Clip keeps its At and the
+// cut stays on its Beat.
+type Transition struct {
+	Type     string  `json:"type"`
+	Duration float64 `json:"duration"`
+}
+
+// Transition types.
+const (
+	Crossfade = "crossfade" // one Clip dissolves into the next
+	Flash     = "flash"     // fades up to white and back down into the next Clip
+	Dip       = "dip"       // fades through black
+	Zoom      = "zoom"      // zooms into the outgoing Clip while the next fades in
+	Pixelize  = "pixelize"  // breaks into blocks and resolves into the next Clip
+)
+
+// TransitionTypes lists every Transition type.
+var TransitionTypes = []string{Crossfade, Flash, Dip, Zoom, Pixelize}
+
+// TransitionIn returns the Duration of the Transition into Clip i, or 0.
+func (t *Timeline) TransitionIn(i int) float64 {
+	if i <= 0 || i >= len(t.Clips) || t.Clips[i].Transition == nil {
+		return 0
+	}
+	return t.Clips[i].Transition.Duration
 }
 
 // TextLayer is text drawn over the Timeline in [Start, End), in a font

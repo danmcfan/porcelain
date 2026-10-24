@@ -52,7 +52,18 @@
           "type": "array",
           "description": "Visual treatments on this Clip, applied in a fixed order: speed_ramp, color_grade, vhs, film_grain, glitch, strobe. Each type at most once.",
           "items": { "$ref": "#/$defs/effect" }
-        }
+        },
+        "transition": { "$ref": "#/$defs/transition" }
+      }
+    },
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "duration"],
+      "description": "Blends the previous Clip into this one, centred on the cut. Render plays duration/2 of Source past the previous Clip's out and before this Clip's in, so at and the cut's Beat are unchanged. Not allowed on the first Clip.",
+      "properties": {
+        "type": { "enum": ["crossfade", "flash", "dip", "zoom", "pixelize"] },
+        "duration": { "type": "number", "exclusiveMinimum": 0, "description": "Seconds; at most the length of this Clip and of the one before it." }
       }
     },
     "effect": {
