@@ -1,0 +1,64 @@
+version: '3'
+
+vars:
+  BIN: bin/porcelain{{exeExt}}
+  PKG: ./cmd/porcelain
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+  LDFLAGS: -s -w -X main.version={{.VERSION}}
+  PLATFORMS: darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64 windows/arm64
+
+env:
+  CGO_ENABLED: '0'
+
+tasks:
+  build:
+    desc: Build bin/porcelain
+    cmds:
+      - go build -trimpath -ldflags '{{.LDFLAGS}}' -o {{.BIN}} {{.PKG}}
+
+  test:
+    desc: Unit + integration tests (integration tests need ffmpeg)
+    cmds:
+      - go test ./...
+
+  test-short:
+    desc: Unit tests only
+    cmds:
+      - go test -short ./...
+
+  lint:
+    desc: golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
+  fixtures:
+    desc: Generate the synthetic Fixtures
+    cmds:
+      - scripts/gen-fixtures.sh testdata/fixtures
+
+  dist:
+    desc: Cross-compile every platform into dist/
+    cmds:
+      - for: { var: PLATFORMS, split: ' ' }
+        cmd: |
+          os={{splitList "/" .ITEM | first}}; arch={{splitList "/" .ITEM | last}}
+          ext=; [ $os = windows ] && ext=.exe
+          echo "dist/porcelain-$os-$arch$ext"
+          GOOS=$os GOARCH=$arch go build -trimpath -ldflags '{{.LDFLAGS}}' -o dist/porcelain-$os-$arch$ext {{.PKG}}
+
+  # Assemble an installable Skill folder for the host platform.
+  skill:
+    desc: Assemble dist/skill/porcelain (SKILL.md, schema, host binary)
+    deps: [build]
+    cmds:
+      - rm -rf dist/skill/porcelain
+      - mkdir -p dist/skill/porcelain/bin
+      - cp skill/porcelain/SKILL.md skill/porcelain/timeline.schema.json dist/skill/porcelain/
+      - cp {{.BIN}} dist/skill/porcelain/bin/
+      - echo "dist/skill/porcelain ({{OS}}/{{ARCH}})"
+
+  clean:
+    desc: Remove build output and Fixtures
+    cmds:
+      - rm -rf bin dist testdata/fixtures

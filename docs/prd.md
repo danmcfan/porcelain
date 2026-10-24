@@ -152,6 +152,6 @@ Acceptance criteria (original, truncated): "Given a folder containing multiple u
 - **Input formats:** iPhone HEVC `.MOV` (including 4K), H.264 `.MP4`, JPG/HEIC Stills; Songs as MP3, WAV, M4A/AAC. See `docs/footage.md`.
 - **Real-footage quirks:** apply rotation flags, handle mixed and variable frame rates, pick the correct audio stream among several, ignore metadata data streams, dedupe identical files.
 - **Performance:** analysis runs on Proxies, cached per Source by content hash; originals are decoded only for the final Render. Re-analysing unchanged Footage is near-instant.
-- **Distribution:** users build one static `porcelain` binary and the Skill from source (`make skill`); no published releases; no API keys; ffmpeg/ffprobe on `PATH`, checked by `porcelain doctor` (ADRs 0001, 0002).
+- **Distribution:** users build one static `porcelain` binary and the Skill from source (`task skill`); no published releases; no API keys; ffmpeg/ffprobe on `PATH`, checked by `porcelain doctor` (ADRs 0001, 0002).
 - **Harness interface:** every command is non-interactive and prints machine-readable JSON.
 - **Privacy:** Footage never leaves the user's machine via the binary.

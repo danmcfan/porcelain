@@ -23,4 +23,4 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 ## Validate every change
 
-Run `make lint test` after changing code and before reporting it done; both must pass. There is no CI and no commit hook, so this is the only check.
+Run `task lint test` after changing code and before reporting it done; both must pass. There is no CI and no commit hook, so this is the only check.
