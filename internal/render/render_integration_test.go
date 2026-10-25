@@ -147,6 +147,107 @@ func TestRenderTransitionKeepsLengthAndFlashesOnTheCut(t *testing.T) {
 	}
 }
 
+// cutTimeline joins 2 s of moving test pattern to 2 s of a Still with a
+// Transition of type typ, so the cut is at 2 s.
+func cutTimeline(fx, typ string, d float64) *timeline.Timeline {
+	return &timeline.Timeline{
+		SchemaVersion: timeline.SchemaVersion,
+		Output:        timeline.Output{Aspect: "1:1", FPS: 30},
+		Song:          timeline.Song{Path: filepath.Join(fx, "songs", "click-120bpm.wav")},
+		Clips: []timeline.Clip{
+			{Source: filepath.Join(fx, "footage", "IMG_0007.MP4"), In: 5, Out: 7, At: 0},
+			{Source: filepath.Join(fx, "footage", "IMG_0005.JPG"), Out: 2, At: 2, Transition: &timeline.Transition{Type: typ, Duration: d}},
+		},
+	}
+}
+
+func TestRenderEveryTransitionType(t *testing.T) {
+	fx := ffmpegtest.Fixtures(t)
+	for _, typ := range timeline.TransitionTypes {
+		t.Run(typ, func(t *testing.T) {
+			out := filepath.Join(t.TempDir(), "out.mp4")
+			res, err := render.Render(context.Background(), cutTimeline(fx, typ, 0.4), out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.Duration != 4 {
+				t.Errorf("Duration = %v, want 4", res.Duration)
+			}
+			// Well after the Transition only the Still is left.
+			if d := meanDiff(frame(t, out, 2.5), frame(t, out, 3.5)); d > 3 {
+				t.Errorf("frames at 2.5 s and 3.5 s differ by %.1f; want the Transition over", d)
+			}
+		})
+	}
+}
+
+func TestRenderFlashbangHitsWhiteOnTheCut(t *testing.T) {
+	fx := ffmpegtest.Fixtures(t)
+	out := filepath.Join(t.TempDir(), "out.mp4")
+	if _, err := render.Render(context.Background(), cutTimeline(fx, timeline.Flashbang, 0.6), out); err != nil {
+		t.Fatal(err)
+	}
+	before, early, cut, after := luma(frame(t, out, 1.8)), luma(frame(t, out, 1)), luma(frame(t, out, 2)), luma(frame(t, out, 3))
+	if before > early+20 {
+		t.Errorf("mean luma %.0f just before the cut vs %.0f at 1 s; want the outgoing Clip untouched until the cut", before, early)
+	}
+	if cut < 230 {
+		t.Errorf("mean luma %.0f on the cut; want a white hit", cut)
+	}
+	if mid := luma(frame(t, out, 2.15)); mid >= cut || mid <= after {
+		t.Errorf("mean luma %.0f at 2.15 s; want it decaying from %.0f on the cut toward %.0f", mid, cut, after)
+	}
+}
+
+func TestRenderGlitchTearsOnlyAroundTheCut(t *testing.T) {
+	fx := ffmpegtest.Fixtures(t)
+	out := filepath.Join(t.TempDir(), "out.mp4")
+	if _, err := render.Render(context.Background(), cutTimeline(fx, timeline.Glitch, 0.6), out); err != nil {
+		t.Fatal(err)
+	}
+	still := frame(t, out, 3)
+	if d := meanDiff(frame(t, out, 2), still); d < 15 {
+		t.Errorf("frame on the cut differs from the incoming Still by %.1f; want it torn", d)
+	}
+	if d := meanDiff(frame(t, out, 2.4), still); d > 3 {
+		t.Errorf("frame after the Transition differs from the Still by %.1f; want it clean", d)
+	}
+}
+
+func TestRenderReframeZoomsOnTheFocusPointAndPushesIn(t *testing.T) {
+	fx := ffmpegtest.Fixtures(t)
+	// A Still keeps the picture constant, so only the Reframe changes it.
+	still := filepath.Join(fx, "footage", "IMG_0005.JPG")
+	tl := &timeline.Timeline{
+		SchemaVersion: timeline.SchemaVersion,
+		Output:        timeline.Output{Aspect: "1:1", FPS: 30},
+		Song:          timeline.Song{Path: filepath.Join(fx, "songs", "click-120bpm.wav")},
+		Clips: []timeline.Clip{
+			{Source: still, Out: 1, At: 0, Reframe: &timeline.Reframe{Zoom: 4, X: 0, Y: 0}},
+			{Source: still, Out: 1, At: 1, Reframe: &timeline.Reframe{Zoom: 4, X: 1, Y: 1}},
+			{Source: still, Out: 2, At: 2, Reframe: &timeline.Reframe{Zoom: 1, X: 0.5, Y: 0.5, ZoomEnd: 4}},
+			{Source: still, Out: 1, At: 4, Reframe: &timeline.Reframe{Zoom: 4, X: 0.5, Y: 0.5}},
+			{Source: still, Out: 1, At: 5},
+		},
+	}
+	out := filepath.Join(t.TempDir(), "out.mp4")
+	if _, err := render.Render(context.Background(), tl, out); err != nil {
+		t.Fatal(err)
+	}
+	corner, opposite := frame(t, out, 0.5), frame(t, out, 1.5)
+	pushStart, pushEnd := frame(t, out, 2), frame(t, out, 3.96)
+	zoomed, plain := frame(t, out, 4.5), frame(t, out, 5.5)
+	if d := meanDiff(corner, opposite); d < 30 {
+		t.Errorf("top-left and bottom-right Reframes differ by %.0f; want different parts of the Source", d)
+	}
+	if d := meanDiff(pushStart, plain); d > 8 {
+		t.Errorf("push-in starts %.0f away from the plain cover crop; want zoom 1 to match it", d)
+	}
+	if d := meanDiff(pushEnd, zoomed); d > 15 {
+		t.Errorf("push-in ends %.0f away from a zoom 4 Reframe; want it to land there", d)
+	}
+}
+
 func TestRenderRejectsMissingFont(t *testing.T) {
 	fx := ffmpegtest.Fixtures(t)
 	tl := &timeline.Timeline{

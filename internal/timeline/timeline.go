@@ -53,7 +53,30 @@ type Clip struct {
 	// Transition blends the previous Clip into this one. The first Clip has
 	// none.
 	Transition *Transition `json:"transition,omitempty"`
+	// Reframe zooms into the Source around a focus point. Without one the
+	// Source covers the frame, center-cropped.
+	Reframe *Reframe `json:"reframe,omitempty"`
 }
+
+// Reframe zooms a Clip into its Source around a focus point, past the crop
+// that covers the frame, optionally pushing in or pulling out across the
+// Clip.
+type Reframe struct {
+	// Zoom is the magnification over the cover crop at the Clip's first
+	// frame: 1 shows the whole cover crop, 2 half its width.
+	Zoom float64 `json:"zoom"`
+	// X and Y place the focus point in the upright Source, from 0 (left,
+	// top) to 1 (right, bottom). The view is centred on it, clamped to the
+	// Source's edges.
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+	// ZoomEnd is the zoom at the Clip's last frame, reached linearly; 0
+	// holds Zoom.
+	ZoomEnd float64 `json:"zoom_end,omitempty"`
+}
+
+// MaxZoom is the largest Reframe zoom.
+const MaxZoom = 4.0
 
 // Duration is the Clip's length on the Timeline.
 func (c Clip) Duration() float64 { return c.Out - c.In }
@@ -106,10 +129,13 @@ const (
 	Dip       = "dip"       // fades through black
 	Zoom      = "zoom"      // zooms into the outgoing Clip while the next fades in
 	Pixelize  = "pixelize"  // breaks into blocks and resolves into the next Clip
+	Flashbang = "flashbang" // hard cut to white on the cut, decaying into the next Clip
+	// Glitch (the same name as the Effect) tears the frame into sideways
+	// slices that flicker between the two Clips.
 )
 
 // TransitionTypes lists every Transition type.
-var TransitionTypes = []string{Crossfade, Flash, Dip, Zoom, Pixelize}
+var TransitionTypes = []string{Crossfade, Flash, Flashbang, Dip, Zoom, Pixelize, Glitch}
 
 // TransitionIn returns the Duration of the Transition into Clip i, or 0.
 func (t *Timeline) TransitionIn(i int) float64 {

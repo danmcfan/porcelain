@@ -83,6 +83,15 @@ func TestValidateTransitionOK(t *testing.T) {
 	}
 }
 
+func TestValidateReframeOK(t *testing.T) {
+	tl := valid()
+	tl.Clips[0].Reframe = &Reframe{Zoom: 1, X: 0, Y: 1, ZoomEnd: MaxZoom}
+	tl.Clips[1].Reframe = &Reframe{Zoom: 2.5, X: 0.5, Y: 0.4}
+	if ps := Validate(tl, media); len(ps) != 0 {
+		t.Fatalf("unexpected problems: %v", ps)
+	}
+}
+
 func TestValidateTextLayerOK(t *testing.T) {
 	tl := valid()
 	tl.TextLayers = []TextLayer{{Text: "TOUR", End: 1, Font: fontPath, Size: 80, Color: "#ff0080"}}
@@ -134,6 +143,11 @@ func TestValidateProblems(t *testing.T) {
 		{"transition before source start", func(t *Timeline) {
 			t.Clips = []Clip{{Source: "still.jpg", Out: 1}, {Source: "a.mov", In: 0.2, Out: 2.2, At: 1, Transition: &Transition{Type: Dip, Duration: 1}}}
 		}, "clips[1].transition.duration", "before in"},
+		{"reframe zoom low", func(t *Timeline) { t.Clips[0].Reframe = &Reframe{Zoom: 0.5, X: 0.5, Y: 0.5} }, "clips[0].reframe.zoom", "between 1 and 4"},
+		{"reframe zoom high", func(t *Timeline) { t.Clips[0].Reframe = &Reframe{Zoom: 5, X: 0.5, Y: 0.5} }, "clips[0].reframe.zoom", "between 1 and 4"},
+		{"reframe zoom_end", func(t *Timeline) { t.Clips[0].Reframe = &Reframe{Zoom: 1, X: 0.5, Y: 0.5, ZoomEnd: 0.8} }, "clips[0].reframe.zoom_end", "between 1 and 4"},
+		{"reframe x", func(t *Timeline) { t.Clips[0].Reframe = &Reframe{Zoom: 1, X: 1.2, Y: 0.5} }, "clips[0].reframe.x", "between 0 and 1"},
+		{"reframe y", func(t *Timeline) { t.Clips[0].Reframe = &Reframe{Zoom: 1, X: 0.5, Y: -0.1} }, "clips[0].reframe.y", "between 0 and 1"},
 		{"text end", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", Start: 2, End: 1, Font: fontPath}} }, "text_layers[0].end", "greater"},
 		{"text position", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", End: 1, Font: fontPath, Position: "left"}} }, "text_layers[0].position", "one of"},
 		{"font required", func(t *Timeline) { t.TextLayers = []TextLayer{{Text: "hi", End: 1}} }, "text_layers[0].font", "required"},

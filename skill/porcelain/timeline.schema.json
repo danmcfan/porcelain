@@ -53,7 +53,20 @@
           "description": "Visual treatments on this Clip, applied in a fixed order: speed_ramp, color_grade, vhs, film_grain, glitch, strobe. Each type at most once.",
           "items": { "$ref": "#/$defs/effect" }
         },
-        "transition": { "$ref": "#/$defs/transition" }
+        "transition": { "$ref": "#/$defs/transition" },
+        "reframe": { "$ref": "#/$defs/reframe" }
+      }
+    },
+    "reframe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zoom", "x", "y"],
+      "description": "Zooms into the Source around a focus point, past the crop that covers the frame. Without one the Source is center-cropped.",
+      "properties": {
+        "zoom": { "type": "number", "minimum": 1, "maximum": 4, "description": "Magnification over the cover crop at the Clip's first frame: 1 shows the whole cover crop, 2 half its width." },
+        "x": { "type": "number", "minimum": 0, "maximum": 1, "description": "Focus point across the upright Source: 0 left, 1 right. The view is centred on it, clamped to the Source's edges." },
+        "y": { "type": "number", "minimum": 0, "maximum": 1, "description": "Focus point down the upright Source: 0 top, 1 bottom." },
+        "zoom_end": { "type": "number", "minimum": 0, "maximum": 4, "description": "Zoom at the Clip's last frame, reached linearly (a push-in or pull-out); 0 or omitted holds zoom." }
       }
     },
     "transition": {
@@ -62,7 +75,7 @@
       "required": ["type", "duration"],
       "description": "Blends the previous Clip into this one, centred on the cut. Render plays duration/2 of Source past the previous Clip's out and before this Clip's in, so at and the cut's Beat are unchanged. Not allowed on the first Clip.",
       "properties": {
-        "type": { "enum": ["crossfade", "flash", "dip", "zoom", "pixelize"] },
+        "type": { "enum": ["crossfade", "flash", "flashbang", "dip", "zoom", "pixelize", "glitch"] },
         "duration": { "type": "number", "exclusiveMinimum": 0, "description": "Seconds; at most the length of this Clip and of the one before it." }
       }
     },

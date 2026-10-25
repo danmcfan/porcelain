@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -155,9 +156,10 @@ func Args(t *timeline.Timeline, media *probe.Media, overlays []string, beats []f
 		for j, b := range beats {
 			clipBeats[j] = b - start
 		}
+		fit, zoom := frameFilters(c, src.Width, src.Height, w, h, t.Output.FPS)
 		fmt.Fprintf(&graph,
-			"[%d:v]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,setsar=1,%sformat=yuv420p,trim=duration=%s,setpts=PTS-STARTPTS,%sformat=yuv420p,settb=1/%d[v%d];",
-			i, w, h, w, h, resampleFilter(c, t.Output.FPS), dur, effectFilters(c, i, clipBeats, t.Output.FPS), t.Output.FPS, i)
+			"[%d:v]%s,setsar=1,%s%sformat=yuv420p,trim=duration=%s,setpts=PTS-STARTPTS,%sformat=yuv420p,settb=1/%d[v%d];",
+			i, fit, resampleFilter(c, t.Output.FPS), zoom, dur, effectFilters(c, i, clipBeats, t.Output.FPS), t.Output.FPS, i)
 	}
 	joinClips(&graph, t, lens)
 
@@ -179,6 +181,53 @@ func Args(t *timeline.Timeline, media *probe.Media, overlays []string, beats []f
 	return args, nil
 }
 
+// frameFilters returns the filters that fit c's Source (upright
+// sw x sh) to the w x h frame: fit before the fps resample, zoom (empty,
+// or ending in a comma) after it. Without a Reframe the Source is scaled to
+// cover the frame and center-cropped. A Reframe crops the view at its zoom
+// around the focus point, in Source pixels, then scales it to the frame.
+// A push-in or pull-out crops the view at the smaller zoom and zoompans
+// inside it, one output frame per resampled frame, so timing is unchanged.
+func frameFilters(c timeline.Clip, sw, sh, w, h, fps int) (fit, zoom string) {
+	r := c.Reframe
+	if r == nil {
+		return fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d", w, h, w, h), ""
+	}
+	end := r.ZoomEnd
+	if end == 0 {
+		end = r.Zoom
+	}
+	cover := math.Max(float64(w)/float64(sw), float64(h)/float64(sh))
+	cx, cy := r.X*float64(sw), r.Y*float64(sh)
+	// view is the Source rectangle shown at zoom z, centred on the focus
+	// point and clamped inside the Source.
+	view := func(z float64) (vx, vy, vw, vh float64) {
+		vw = math.Min(float64(w)/(cover*z), float64(sw))
+		vh = math.Min(float64(h)/(cover*z), float64(sh))
+		return clamp(cx-vw/2, 0, float64(sw)-vw), clamp(cy-vh/2, 0, float64(sh)-vh), vw, vh
+	}
+	lo := math.Min(r.Zoom, end)
+	vx, vy, vw, vh := view(lo)
+	fit = fmt.Sprintf("crop=%d:%d:%d:%d,scale=%d:%d", even(vw), even(vh), int(vx), int(vy), w, h)
+	if end == r.Zoom {
+		return fit, ""
+	}
+	// Inside the cropped view zoompan's zoom is relative to lo; it is
+	// scaled to w x h, so place the smaller view in output pixels.
+	k := float64(w) / vw
+	frames := c.Duration() * float64(fps)
+	z := fmt.Sprintf("(%g+%g*min(on/%g,1))", r.Zoom/lo, (end-r.Zoom)/lo, math.Max(frames-1, 1))
+	zoom = fmt.Sprintf("zoompan=z='%s':x='clip(%g-iw/zoom/2,%g,%g-iw/zoom)-%g':y='clip(%g-ih/zoom/2,%g,%g-ih/zoom)-%g':d=1:s=%dx%d:fps=%d,",
+		z, cx*k, 0.0, float64(sw)*k, vx*k, cy*k, 0.0, float64(sh)*k, vy*k, w, h, fps)
+	return fit, zoom
+}
+
+func clamp(v, lo, hi float64) float64 { return math.Max(lo, math.Min(v, hi)) }
+
+// even rounds a crop size down to an even number of pixels, as yuv420p
+// needs.
+func even(f float64) int { return int(f) &^ 1 }
+
 // joinClips writes the filters that join the Clip streams [v0], [v1], ...
 // into [v]: a Transition becomes an xfade over the overlap, other cuts a
 // concat. lens are the stretched Clip lengths.
@@ -195,7 +244,7 @@ func joinClips(graph *strings.Builder, t *timeline.Timeline, lens []float64) {
 		}
 		if d := t.TransitionIn(i); d > 0 {
 			fmt.Fprintf(graph, "%s[v%d]xfade=transition=%s:duration=%s:offset=%s%s",
-				in, i, xfadeNames[t.Clips[i].Transition.Type], secs(d), secs(length-d), out)
+				in, i, xfadeTransitions[t.Clips[i].Transition.Type], secs(d), secs(length-d), out)
 			length += lens[i] - d
 		} else {
 			// concat outputs a microsecond timebase; xfade needs both
@@ -205,15 +254,6 @@ func joinClips(graph *strings.Builder, t *timeline.Timeline, lens []float64) {
 		}
 		in = fmt.Sprintf("[j%d]", i)
 	}
-}
-
-// xfadeNames maps each Transition type to its ffmpeg xfade transition.
-var xfadeNames = map[string]string{
-	timeline.Crossfade: "fade",
-	timeline.Flash:     "fadewhite",
-	timeline.Dip:       "fadeblack",
-	timeline.Zoom:      "zoomin",
-	timeline.Pixelize:  "pixelize",
 }
 
 func secs(f float64) string { return strconv.FormatFloat(f, 'f', 3, 64) }

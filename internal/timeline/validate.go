@@ -107,6 +107,20 @@ func Validate(t *Timeline, m Media) []Problem {
 				add(ef+".params.intensity", "must be between 0 and 1, got %g", v)
 			}
 		}
+		if r := c.Reframe; r != nil {
+			if r.Zoom < 1 || r.Zoom > MaxZoom {
+				add(f+".reframe.zoom", "must be between 1 and %g, got %g", MaxZoom, r.Zoom)
+			}
+			if r.ZoomEnd != 0 && (r.ZoomEnd < 1 || r.ZoomEnd > MaxZoom) {
+				add(f+".reframe.zoom_end", "must be 0 (hold zoom) or between 1 and %g, got %g", MaxZoom, r.ZoomEnd)
+			}
+			if r.X < 0 || r.X > 1 {
+				add(f+".reframe.x", "must be between 0 and 1, got %g", r.X)
+			}
+			if r.Y < 0 || r.Y > 1 {
+				add(f+".reframe.y", "must be between 0 and 1, got %g", r.Y)
+			}
+		}
 		if m != nil && c.Source != "" {
 			d, still, err := m.Duration(c.Source)
 			switch {

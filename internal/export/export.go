@@ -34,8 +34,8 @@ type Dropped struct {
 	Reason string `json:"reason"`
 }
 
-// dropped lists the Effects, Transitions and Text Layers no Export carries
-// yet.
+// dropped lists the Effects, Transitions, Reframes and Text Layers no
+// Export carries yet.
 func dropped(t *timeline.Timeline, format string) []Dropped {
 	ds := []Dropped{}
 	for i, c := range t.Clips {
@@ -51,6 +51,12 @@ func dropped(t *timeline.Timeline, format string) []Dropped {
 			ds = append(ds, Dropped{
 				Field:  fmt.Sprintf("clips[%d].transition", i),
 				Reason: fmt.Sprintf("Transitions are not exported to %s yet; add a %q transition in the editor", format, c.Transition.Type),
+			})
+		}
+		if c.Reframe != nil {
+			ds = append(ds, Dropped{
+				Field:  fmt.Sprintf("clips[%d].reframe", i),
+				Reason: fmt.Sprintf("Reframes are not exported to %s yet; scale and position the Clip in the editor", format),
 			})
 		}
 	}

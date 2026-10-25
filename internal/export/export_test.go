@@ -169,10 +169,11 @@ func TestFCPXMLFormatsCarryUprightSourceSize(t *testing.T) {
 	}
 }
 
-func TestFCPXMLReportsDroppedEffectsTransitionsAndTextLayers(t *testing.T) {
+func TestFCPXMLReportsDroppedEffectsTransitionsReframesAndTextLayers(t *testing.T) {
 	tl := sample()
 	tl.Clips[1].Effects = []timeline.Effect{{Type: "vhs"}}
 	tl.Clips[1].Transition = &timeline.Transition{Type: timeline.Crossfade, Duration: 0.5}
+	tl.Clips[1].Reframe = &timeline.Reframe{Zoom: 1.5, X: 0.5, Y: 0.4}
 	tl.TextLayers = []timeline.TextLayer{{Text: "TOUR", Start: 0, End: 1}}
 	rep, err := export.FCPXML(tl, sources, io.Discard)
 	if err != nil {
@@ -182,7 +183,7 @@ func TestFCPXMLReportsDroppedEffectsTransitionsAndTextLayers(t *testing.T) {
 	for _, d := range rep.Dropped {
 		fields = append(fields, d.Field)
 	}
-	if want := []string{"clips[1].effects[0]", "clips[1].transition", "text_layers[0]"}; !slices.Equal(fields, want) {
+	if want := []string{"clips[1].effects[0]", "clips[1].transition", "clips[1].reframe", "text_layers[0]"}; !slices.Equal(fields, want) {
 		t.Errorf("dropped fields = %v, want %v", fields, want)
 	}
 }
